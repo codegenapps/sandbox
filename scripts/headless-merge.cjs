@@ -164,13 +164,13 @@ async function run() {
         let maxX = 100;
         let maxY = 100;
         
-        // 尋找現有畫布的最右下方座標，作為新節點排列的基準
+        // 尋找現有畫布的最佳排列位置，同時支援 position 物件與根部 x,y 欄位
         (currentDiagram.tables || []).forEach(t => {
             tableMap.set(t.name, t);
-            if (t.position) {
-                if (t.position.x > maxX) maxX = t.position.x;
-                if (t.position.y > maxY) maxY = t.position.y;
-            }
+            const curX = t.x || (t.position && t.position.x) || 0;
+            const curY = t.y || (t.position && t.position.y) || 0;
+            if (curX > maxX) maxX = curX;
+            if (curY > maxY) maxY = curY;
         });
 
         const newTablesToArrange = [];
@@ -179,10 +179,13 @@ async function run() {
                const existing = tableMap.get(t.name);
                tableMap.set(t.name, { ...existing, fields: t.fields, comment: t.comment, indices: t.indices });
            } else {
-               // 💡 關鍵修正：給予新節點預設座標！避免前端 React Flow 報錯 (NaN)
-               maxX += 50;
-               maxY += 50;
+               // 💡 終極相容修正：同時寫入根部 x,y 與 position 物件
+               maxX += 150;
+               maxY += 100;
+               t.x = maxX;
+               t.y = maxY;
                t.position = { x: maxX, y: maxY };
+               
                tableMap.set(t.name, t);
                newTablesToArrange.push(t);
            }
