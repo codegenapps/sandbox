@@ -65,7 +65,7 @@ async function init() {
                 log('>>> Artifacts extracted successfully.');
                 
                 // 補上動態生成的環境檔案
-                writeEnv(projectApiUrl, apiKey, projectDocUrl);
+                writeEnv(projectApiUrl, apiKey, projectDocUrl, token);
                 if (!fs.existsSync('/home/user/app/api')) fs.mkdirSync('/home/user/app/api', { recursive: true });
                 fs.writeFileSync('/home/user/app/api/schema.json', schemaContent);
                 
@@ -79,7 +79,7 @@ async function init() {
         } else {
             log('>>> Case: NEW PROJECT. Initializing environment variables & API schema...');
             // 💡 在全 Git 驅動架構下，不需要再生任何 boilerplate，只要寫入動態變數即可
-            writeEnv(projectApiUrl, apiKey, projectDocUrl);
+            writeEnv(projectApiUrl, apiKey, projectDocUrl, token);
             if (!fs.existsSync('/home/user/app/api')) fs.mkdirSync('/home/user/app/api', { recursive: true });
             fs.writeFileSync('/home/user/app/api/schema.json', schemaContent);
         }
@@ -91,10 +91,11 @@ async function init() {
     }
 }
 
-function writeEnv(apiUrl, apiKey, docUrl) {
+function writeEnv(apiUrl, apiKey, docUrl, token) {
     let env = 'NEXT_PUBLIC_CGA_API_URL=' + apiUrl + '\n' +
                 'NEXT_PUBLIC_CGA_API_KEY=' + apiKey + '\n' +
                 'NEXT_PUBLIC_CGA_DOC_URL=' + docUrl + '\n' +
+                'CGA_ACCESS_TOKEN=' + token + '\n' + // 💡 確保後端 AI 工具能讀到管理員 Token
                 'NEXT_PUBLIC_IS_SANDBOX=true\n';
     if (process.env.GITHUB_ACCESS_TOKEN) {
         env += 'GITHUB_ACCESS_TOKEN=' + process.env.GITHUB_ACCESS_TOKEN + '\n';
