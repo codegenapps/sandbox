@@ -161,13 +161,28 @@ async function run() {
         const migrationHints = generateMigrationHints(currentDiagram, result.tables);
 
         const tableMap = new Map();
-        (currentDiagram.tables || []).forEach(t => tableMap.set(t.name, t));
+        let maxX = 100;
+        let maxY = 100;
+        
+        // 尋找現有畫布的最右下方座標，作為新節點排列的基準
+        (currentDiagram.tables || []).forEach(t => {
+            tableMap.set(t.name, t);
+            if (t.position) {
+                if (t.position.x > maxX) maxX = t.position.x;
+                if (t.position.y > maxY) maxY = t.position.y;
+            }
+        });
+
         const newTablesToArrange = [];
         result.tables.forEach(t => {
            if (tableMap.has(t.name)) {
                const existing = tableMap.get(t.name);
                tableMap.set(t.name, { ...existing, fields: t.fields, comment: t.comment, indices: t.indices });
            } else {
+               // 💡 關鍵修正：給予新節點預設座標！避免前端 React Flow 報錯 (NaN)
+               maxX += 50;
+               maxY += 50;
+               t.position = { x: maxX, y: maxY };
                tableMap.set(t.name, t);
                newTablesToArrange.push(t);
            }
