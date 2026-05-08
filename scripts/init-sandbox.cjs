@@ -56,6 +56,10 @@ async function init() {
 
         const { execSync } = require('child_process');
 
+        // 💡 智慧目錄判斷：配合 lifecycle.go 的動態注入路徑
+        const hasSrc = fs.existsSync('/home/user/app/src');
+        const apiDir = hasSrc ? '/home/user/app/src/api' : '/home/user/app/api';
+
         // 4. 核心還原邏輯
         if (snapshotUrl && snapshotUrl !== "null" && snapshotUrl !== "") {
             log('>>> Case: EXISTING PROJECT. Restoring from ZIP Snapshot...');
@@ -66,8 +70,8 @@ async function init() {
                 
                 // 補上動態生成的環境檔案
                 writeEnv(projectApiUrl, apiKey, projectDocUrl, token);
-                if (!fs.existsSync('/home/user/app/api')) fs.mkdirSync('/home/user/app/api', { recursive: true });
-                fs.writeFileSync('/home/user/app/api/schema.json', schemaContent);
+                if (!fs.existsSync(apiDir)) fs.mkdirSync(apiDir, { recursive: true });
+                fs.writeFileSync(`${apiDir}/schema.json`, schemaContent);
                 
                 log('>>> Ensuring dependencies are ready...');
                 try { execSync('npm install --legacy-peer-deps', { cwd: '/home/user/app', stdio: 'inherit' }); } catch(err) {}
@@ -80,8 +84,8 @@ async function init() {
             log('>>> Case: NEW PROJECT. Initializing environment variables & API schema...');
             // 💡 在全 Git 驅動架構下，不需要再生任何 boilerplate，只要寫入動態變數即可
             writeEnv(projectApiUrl, apiKey, projectDocUrl, token);
-            if (!fs.existsSync('/home/user/app/api')) fs.mkdirSync('/home/user/app/api', { recursive: true });
-            fs.writeFileSync('/home/user/app/api/schema.json', schemaContent);
+            if (!fs.existsSync(apiDir)) fs.mkdirSync(apiDir, { recursive: true });
+            fs.writeFileSync(`${apiDir}/schema.json`, schemaContent);
         }
 
         log('>>> Initialization successful.');
