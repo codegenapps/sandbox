@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/codegenapps/sandbox#readme",
   "dependencies": {
-    "@codegenapps/frontend-sdk": "^1.0.11",
+    "@codegenapps/frontend-sdk": "latest",
     "@nextui-org/react": "^2.6.11",
     "@tanstack/react-query": "^5.100.9",
     "@types/node": "^25.6.0",
