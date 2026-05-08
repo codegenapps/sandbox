@@ -59,10 +59,21 @@ if (typeof window !== 'undefined') {
       }
 
       try {
+          // 💡 阻擋跨域的 CSS (例如 Google Fonts)，避免引發 SecurityError: cssRules 崩潰
+          const filter = (node) => {
+              if (node?.tagName === 'LINK' && node?.rel === 'stylesheet') {
+                  if (node.href && !node.href.startsWith(window.location.origin)) {
+                      return false;
+                  }
+              }
+              return true;
+          };
+
           // html-to-image 直接輸出 Base64 JPEG
           const dataUrl = await htmlToImage.toJpeg(document.body, { 
               quality: 0.5,
               backgroundColor: '#000',
+              filter, // 👈 注入過濾器
               // 縮小尺寸以節省容量
               width: document.body.offsetWidth,
               height: document.body.offsetHeight,
