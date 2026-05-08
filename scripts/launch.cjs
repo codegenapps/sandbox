@@ -27,16 +27,59 @@ if (fs.existsSync(pkgPath)) {
 const scripts = pkg.scripts || {};
 const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
-// 2. 決定啟動指令與參數
+// 💡 動態注入：DOM to Source Mapping (CGA Inspector 專用)
+function injectNextJsSourceMap() {
+    log("Injecting CGA Source Map for Next.js...");
+    const pluginCode = `
+module.exports = function(babel) {
+  const { types: t } = babel;
+  return {
+    name: "cga-source-mapping-plugin",
+    visitor: {
+      JSXOpeningElement(path, state) {
+        const filename = state.file.opts.filename;
+        if (!filename || filename.includes('node_modules') || filename.includes('.next')) return;
+        const relativePath = filename.replace('/home/user/app', '');
+        const hasAttr = path.node.attributes.some(attr => t.isJSXAttribute(attr) && attr.name.name === 'data-cga-path');
+        if (!hasAttr) {
+          path.node.attributes.push(t.jsxAttribute(t.jsxIdentifier('data-cga-path'), t.stringLiteral(relativePath)));
+        }
+      }
+    }
+  };
+};`;
+    fs.writeFileSync(path.join(appDir, 'cga-plugin.js'), pluginCode);
+    
+    // 如果沒有 babel 設定，建立一個；如果有，則假設使用者自己控制
+    const babelRcPath = path.join(appDir, '.babelrc');
+    if (!fs.existsSync(babelRcPath)) {
+        fs.writeFileSync(babelRcPath, JSON.stringify({
+            presets: ["next/babel"],
+            plugins: ["./cga-plugin.js"]
+        }, null, 2));
+    }
+}
+
+function injectViteSourceMap() {
+    log("Injecting CGA Source Map for Vite...");
+    // Vite 的 @vitejs/plugin-react 本身就內建了 babel-plugin-transform-react-jsx-source
+    // 只要確保環境變數 NODE_ENV 是 development，Vite 預設就會幫 DOM 加上 __source 屬性
+    // 我們不需要寫 plugin，只需要確保 cga-inspector.js 知道去讀 __source 即可。
+    log("Vite automatically provides __source in development mode.");
+}
+
+// 2. 決定啟動指令與參數，並注入對應配置
 let bin = '';
 let args = [];
 
 if (deps.next || scripts.dev?.includes('next dev')) {
     log("Detected Next.js project.");
+    injectNextJsSourceMap();
     bin = path.join(appDir, 'node_modules/.bin/next');
     args = ['dev', '-H', '0.0.0.0', '-p', '3000'];
 } else if (deps.vite || scripts.dev?.includes('vite')) {
     log("Detected Vite project.");
+    injectViteSourceMap();
     bin = path.join(appDir, 'node_modules/.bin/vite');
     // Vite 需要 --host 才能在容器外訪問
     args = ['--host', '0.0.0.0', '--port', '3000'];

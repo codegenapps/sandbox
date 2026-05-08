@@ -15,7 +15,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <script src="/cga-inspector.js" defer></script>
       </Head>
       <NextUIProvider navigate={router.push}>
-        <main className='dark text-foreground bg-background min-h-screen'>
+        <main className='dark text-foreground bg-background min-h-screen' suppressHydrationWarning>
           <Component {...pageProps} />
         </main>
       </NextUIProvider>
