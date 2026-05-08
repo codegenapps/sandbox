@@ -61,11 +61,52 @@ module.exports = function(babel) {
 }
 
 function injectViteSourceMap() {
-    log("Injecting CGA Source Map for Vite...");
-    // Vite 的 @vitejs/plugin-react 本身就內建了 babel-plugin-transform-react-jsx-source
-    // 只要確保環境變數 NODE_ENV 是 development，Vite 預設就會幫 DOM 加上 __source 屬性
-    // 我們不需要寫 plugin，只需要確保 cga-inspector.js 知道去讀 __source 即可。
-    log("Vite automatically provides __source in development mode.");
+    log("Injecting CGA Source Map for Vite via Babel...");
+    // 1. 先寫入共用的 Babel Plugin
+    const pluginCode = `
+module.exports = function(babel) {
+  const { types: t } = babel;
+  return {
+    name: "cga-source-mapping-plugin",
+    visitor: {
+      JSXOpeningElement(path, state) {
+        const filename = state.file.opts.filename;
+        if (!filename || filename.includes('node_modules') || filename.includes('.next')) return;
+        const relativePath = filename.replace('/home/user/app', '');
+        const hasAttr = path.node.attributes.some(attr => t.isJSXAttribute(attr) && attr.name.name === 'data-cga-path');
+        if (!hasAttr) {
+          path.node.attributes.push(t.jsxAttribute(t.jsxIdentifier('data-cga-path'), t.stringLiteral(relativePath)));
+        }
+      }
+    }
+  };
+};`;
+    fs.writeFileSync(path.join(appDir, 'cga-plugin.js'), pluginCode);
+
+    // 2. 尋找並修改 vite.config.ts 或 vite.config.js
+    const viteConfigTsPath = path.join(appDir, 'vite.config.ts');
+    const viteConfigJsPath = path.join(appDir, 'vite.config.js');
+    let targetConfigPath = fs.existsSync(viteConfigTsPath) ? viteConfigTsPath : (fs.existsSync(viteConfigJsPath) ? viteConfigJsPath : null);
+
+    if (targetConfigPath) {
+        let content = fs.readFileSync(targetConfigPath, 'utf8');
+        // 檢查是否已經被我們改過
+        if (!content.includes('cga-plugin.js')) {
+            // 嘗試尋找 react() 插件的呼叫，替換為帶有 babel 設定的版本
+            // 這是一個粗暴但有效的正則替換，針對常見的 react() 呼叫
+            const newReactCall = `react({ babel: { plugins: ['./cga-plugin.js'] } })`;
+            
+            if (content.includes('react()')) {
+                 content = content.replace(/react\(\)/g, newReactCall);
+                 fs.writeFileSync(targetConfigPath, content);
+                 log("Successfully injected Babel plugin into Vite config.");
+            } else {
+                 log("Could not find standard react() call in Vite config to inject Babel plugin.");
+            }
+        }
+    } else {
+        log("No vite.config found. Cannot inject Babel plugin.");
+    }
 }
 
 // 2. 決定啟動指令與參數，並注入對應配置
