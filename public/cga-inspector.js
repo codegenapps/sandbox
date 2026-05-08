@@ -46,33 +46,23 @@ if (typeof window !== 'undefined') {
       return info;
   };
 
-  // 💡 改用 html-to-image 並實作智慧裁剪 (Smart-Crop)
+  // 💡 高品質智慧截圖模式
   const captureThumbnail = async () => {
       if (typeof window.htmlToImage === 'undefined') {
-          console.log("[CGA Inspector] Loading html-to-image for screenshot...");
+          console.log("[CGA Inspector] Loading html-to-image...");
           try {
               await new Promise((resolve, reject) => {
                   const script = document.createElement('script');
                   script.src = "https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js";
-                  script.onload = () => {
-                      console.log("[CGA Inspector] html-to-image loaded successfully.");
-                      resolve();
-                  };
-                  script.onerror = () => {
-                      console.error("[CGA Inspector] Failed to load html-to-image script.");
-                      reject(new Error("Script load failed"));
-                  };
+                  script.onload = resolve;
+                  script.onerror = reject;
                   document.head.appendChild(script);
               });
-          } catch (e) {
-              return null;
-          }
+          } catch (e) { return null; }
       }
 
-      console.log("[CGA Inspector] Disabling cross-origin stylesheets...");
       const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
       const disabledLinks = [];
-      
       links.forEach(link => {
           if (link.href && !link.href.startsWith(window.location.origin)) {
               const originalHref = link.href;
@@ -81,52 +71,54 @@ if (typeof window !== 'undefined') {
           }
       });
 
-      try {
-          console.log("[CGA Inspector] Starting Smart-Crop rendering...");
-          const width = document.body.offsetWidth;
-          const height = Math.floor(width * 0.75); // 4:3 比例高度
+      // 💡 決定要拍哪裡：優先拍 React 根節點，避開無關的系統節點
+      const targetEl = document.getElementById('root') || document.getElementById('__next') || document.body;
 
-          return await window.htmlToImage.toJpeg(document.body, { 
+      try {
+          console.log("[CGA Inspector] Starting rendering for target:", targetEl.tagName);
+          const width = targetEl.offsetWidth || window.innerWidth;
+          const height = Math.floor(width * 0.75);
+
+          const base64 = await window.htmlToImage.toJpeg(targetEl, { 
               quality: 0.6,
-              pixelRatio: 1,      // 💡 1倍解析度，速度快且容量小
-              width: width,       // 擷取寬度
-              height: height,     // 只擷取上方 4:3 區域
-              canvasWidth: 400,   // 強制輸出寬度
-              canvasHeight: 300,  // 強制輸出高度
-              cacheBust: true,    // 💡 防止快取導致的 CORS 報錯
-              // 💡 提供一張透明佔位圖，當網頁有死圖或跨域圖片時，用這個替換而不會報錯崩潰！
+              pixelRatio: 1,      // 1倍解析度，平衡效能與容量
+              width: width,       // 擷取原始寬度
+              height: height,     // 擷取 4:3 比例高度
+              canvasWidth: 400,   // 強制縮小到 400px
+              canvasHeight: 300,  // 強制縮小到 300px
+              cacheBust: true,
               imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
               filter: (node) => {
-                 // 💡 略過未載入完成或破圖的 img 標籤
-                 if (node.tagName === 'IMG') {
-                     if (!node.complete || node.naturalWidth === 0) return false;
-                 }
-                 // 💡 略過 iframe 與 Canvas (解決 WebGL 全黑問題)
-                 if (node.tagName === 'IFRAME' || node.tagName === 'CANVAS') return false;
+                 // 💡 略過所有干擾截圖的標籤
+                 if (['IFRAME', 'CANVAS', 'SCRIPT', 'NOSCRIPT'].includes(node.tagName)) return false;
+                 // 💡 略過載入失敗的圖片
+                 if (node.tagName === 'IMG' && (!node.complete || node.naturalWidth === 0)) return false;
                  return true;
               }
           });
+          console.log("[CGA Inspector] Rendering complete. Base64 length:", base64.length);
+          return base64;
       } catch (e) {
-          console.error("[CGA Inspector] Screenshot failed:", e);
+          console.error("[CGA Inspector] Screenshot FATAL ERROR:", e);
+          // 💡 失敗時將 Error 轉文字印出，方便排查
+          console.log("[CGA Inspector] Error Details:", e.message || e);
           return null;
       } finally {
-          console.log("[CGA Inspector] Restoring stylesheets...");
-          disabledLinks.forEach(({ el, href }) => {
-              el.setAttribute('href', href);
-          });
+          console.log("[CGA Inspector] Cleanup and restoring state...");
+          disabledLinks.forEach(({ el, href }) => el.setAttribute('href', href));
       }
   };
 
   window.addEventListener('message', async (event) => {
-    if (event.data?.type === 'CGA_SET_DRAG_API') {
+    if (event.data?.type === 'CGA_TAKE_SCREENSHOT') {
+      console.log("[CGA Inspector] Internal capture requested...");
+      const base64 = await captureThumbnail();
+      window.parent.postMessage({ type: 'CGA_SCREENSHOT_TAKEN', base64 }, '*');
+    } else if (event.data?.type === 'CGA_SET_DRAG_API') {
       window.__cgaDraggingApi = event.data.api;
     } else if (event.data?.type === 'CGA_CLEAR_DRAG_API') {
       window.__cgaDraggingApi = null;
       clearHighlight();
-    } else if (event.data?.type === 'CGA_TAKE_SCREENSHOT') {
-      console.log("[CGA Inspector] Internal capture requested...");
-      const base64 = await captureThumbnail();
-      window.parent.postMessage({ type: 'CGA_SCREENSHOT_TAKEN', base64 }, '*');
     } else if (event.data?.type === 'CGA_INTERNAL_DRAG_OVER') {
       const target = document.elementFromPoint(event.data.x, event.data.y);
       if (target && target !== window.__cgaLastHighlighted) {
@@ -152,7 +144,7 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('load', () => {
-    console.log("[CGA Inspector] Active (with Smart-Crop Screenshot Support)...");
+    console.log("[CGA Inspector] Active (with Smart-Crop Support)...");
     document.addEventListener('click', (e) => {
       if (e.altKey || e.metaKey) {
         e.preventDefault(); e.stopPropagation();
