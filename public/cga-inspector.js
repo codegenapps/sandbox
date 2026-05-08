@@ -1,6 +1,16 @@
 if (typeof window !== 'undefined') {
+  window.__cgaDraggingApi = null;
+
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'CGA_SET_DRAG_API') {
+      window.__cgaDraggingApi = event.data.api;
+    } else if (event.data?.type === 'CGA_CLEAR_DRAG_API') {
+      window.__cgaDraggingApi = null;
+    }
+  });
+
   window.addEventListener('load', () => {
-    console.log("[CGA Inspector] Active and monitoring...");
+    console.log("[CGA Inspector] Active and monitoring (with Cross-Origin DND Support)...");
 
     // 共用的精準路徑尋找邏輯
     const resolveExactPath = (target) => {
@@ -73,33 +83,38 @@ if (typeof window !== 'undefined') {
       }
     }, true);
 
-    // 💡 拖曳 API 邏輯 (Drag-to-API)
+    // 💡 拖曳 API 邏輯 (Drag-to-API - 跨 Iframe 支援)
     document.body.addEventListener('dragover', (e) => {
-        e.preventDefault(); // 必須阻止預設行為才能允許 drop
-        e.target.style.outline = '2px dashed #a855f7'; // Purple outline for drag
+        if (!window.__cgaDraggingApi) return; // 只有在有拖曳 API 時才反應
+        e.preventDefault(); 
+        e.stopPropagation();
+        e.target.style.outline = '2px dashed #a855f7';
         e.target.style.outlineOffset = '2px';
         e.target.style.backgroundColor = 'rgba(168, 85, 247, 0.1)';
     });
 
     document.body.addEventListener('dragleave', (e) => {
+        if (!window.__cgaDraggingApi) return;
+        e.preventDefault();
+        e.stopPropagation();
         e.target.style.outline = '';
         e.target.style.outlineOffset = '';
         e.target.style.backgroundColor = '';
     });
 
     document.body.addEventListener('drop', (e) => {
+        if (!window.__cgaDraggingApi) return;
+        
         e.preventDefault();
+        e.stopPropagation();
         e.target.style.outline = '';
         e.target.style.outlineOffset = '';
         e.target.style.backgroundColor = '';
 
         try {
-            // 解析拖曳過來的 API 資料
-            const dragDataStr = e.dataTransfer.getData('application/json');
-            if (!dragDataStr) return;
-            
-            const dragData = JSON.parse(dragDataStr);
-            if (dragData.type === 'CGA_API_DRAG') {
+            // 💡 不依賴 e.dataTransfer (跨域會被擋)，直接讀取全域狀態
+            const dragData = window.__cgaDraggingApi;
+            if (dragData && dragData.type === 'CGA_API_DRAG') {
                 const target = e.target;
                 const resolvedPath = resolveExactPath(target);
                 const info = getElementInfo(target);
@@ -114,6 +129,9 @@ if (typeof window !== 'undefined') {
                 target.style.outline = '3px solid #a855f7';
                 target.style.outlineOffset = '2px';
                 setTimeout(() => { target.style.outline = ''; target.style.outlineOffset = ''; }, 1000);
+                
+                // 清除狀態
+                window.__cgaDraggingApi = null;
             }
         } catch (err) {
             console.error("[CGA Inspector] Drop Error:", err);
