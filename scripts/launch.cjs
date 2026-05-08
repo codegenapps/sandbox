@@ -48,21 +48,20 @@ module.exports = function(babel) {
     }
   };
 };`;
-    fs.writeFileSync(path.join(appDir, 'cga-plugin.js'), pluginCode);
+    // 💡 修正：改用 .cjs 副檔名，避免 type: module 衝突
+    fs.writeFileSync(path.join(appDir, 'cga-plugin.cjs'), pluginCode);
     
-    // 如果沒有 babel 設定，建立一個；如果有，則假設使用者自己控制
     const babelRcPath = path.join(appDir, '.babelrc');
     if (!fs.existsSync(babelRcPath)) {
         fs.writeFileSync(babelRcPath, JSON.stringify({
             presets: ["next/babel"],
-            plugins: ["./cga-plugin.js"]
+            plugins: ["./cga-plugin.cjs"]
         }, null, 2));
     }
 }
 
 function injectViteSourceMap() {
     log("Injecting CGA Source Map for Vite via Babel...");
-    // 1. 先寫入共用的 Babel Plugin
     const pluginCode = `
 module.exports = function(babel) {
   const { types: t } = babel;
@@ -81,20 +80,17 @@ module.exports = function(babel) {
     }
   };
 };`;
-    fs.writeFileSync(path.join(appDir, 'cga-plugin.js'), pluginCode);
+    // 💡 修正：改用 .cjs 副檔名，避免 type: module 衝突
+    fs.writeFileSync(path.join(appDir, 'cga-plugin.cjs'), pluginCode);
 
-    // 2. 尋找並修改 vite.config.ts 或 vite.config.js
     const viteConfigTsPath = path.join(appDir, 'vite.config.ts');
     const viteConfigJsPath = path.join(appDir, 'vite.config.js');
     let targetConfigPath = fs.existsSync(viteConfigTsPath) ? viteConfigTsPath : (fs.existsSync(viteConfigJsPath) ? viteConfigJsPath : null);
 
     if (targetConfigPath) {
         let content = fs.readFileSync(targetConfigPath, 'utf8');
-        // 檢查是否已經被我們改過
-        if (!content.includes('cga-plugin.js')) {
-            // 嘗試尋找 react() 插件的呼叫，替換為帶有 babel 設定的版本
-            // 這是一個粗暴但有效的正則替換，針對常見的 react() 呼叫
-            const newReactCall = `react({ babel: { plugins: ['./cga-plugin.js'] } })`;
+        if (!content.includes('cga-plugin.cjs')) {
+            const newReactCall = `react({ babel: { plugins: ['./cga-plugin.cjs'] } })`;
             
             if (content.includes('react()')) {
                  content = content.replace(/react\(\)/g, newReactCall);
