@@ -1,6 +1,6 @@
 if (typeof window !== 'undefined') {
   window.__cgaDraggingApi = null;
-  window.__cgaLastHighlighted = null; // 💡 追蹤上一個亮起的元件
+  window.__cgaLastHighlighted = null;
 
   const clearHighlight = () => {
     if (window.__cgaLastHighlighted) {
@@ -46,36 +46,32 @@ if (typeof window !== 'undefined') {
       return info;
   };
 
-  // 💡 動態載入 html2canvas 以節省頻寬，僅在截圖時下載
+  // 💡 改用 html-to-image 以支援現代 CSS (oklab, oklch)
   const captureThumbnail = async () => {
-      if (typeof html2canvas === 'undefined') {
-          console.log("[CGA Inspector] Loading html2canvas for screenshot...");
+      if (typeof htmlToImage === 'undefined') {
+          console.log("[CGA Inspector] Loading html-to-image for screenshot...");
           await new Promise((resolve) => {
               const script = document.createElement('script');
-              script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+              script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
               script.onload = resolve;
               document.head.appendChild(script);
           });
       }
 
       try {
-          const canvas = await html2canvas(document.body, {
-              scale: 0.5, // 初始降採樣
-              useCORS: true,
+          // html-to-image 直接輸出 Base64 JPEG
+          const dataUrl = await htmlToImage.toJpeg(document.body, { 
+              quality: 0.5,
               backgroundColor: '#000',
-              logging: false
+              // 縮小尺寸以節省容量
+              width: document.body.offsetWidth,
+              height: document.body.offsetHeight,
+              style: {
+                  transform: 'scale(0.5)',
+                  transformOrigin: 'top left'
+              }
           });
-
-          // 進一步縮放與壓縮
-          const resizedCanvas = document.createElement('canvas');
-          const ctx = resizedCanvas.getContext('2d');
-          const maxWidth = 400;
-          const scale = Math.min(maxWidth / canvas.width, 1);
-          resizedCanvas.width = canvas.width * scale;
-          resizedCanvas.height = canvas.height * scale;
-          ctx.drawImage(canvas, 0, 0, resizedCanvas.width, resizedCanvas.height);
-          
-          return resizedCanvas.toDataURL('image/jpeg', 0.5); // 低品質 JPEG
+          return dataUrl;
       } catch (e) {
           console.error("[CGA Inspector] Screenshot failed:", e);
           return null;
@@ -84,7 +80,6 @@ if (typeof window !== 'undefined') {
 
   window.addEventListener('message', async (event) => {
     if (event.data?.type === 'CGA_SET_DRAG_API') {
-      console.log("[CGA Inspector] Received API for Drag:", event.data.api);
       window.__cgaDraggingApi = event.data.api;
     } else if (event.data?.type === 'CGA_CLEAR_DRAG_API') {
       window.__cgaDraggingApi = null;
@@ -94,7 +89,6 @@ if (typeof window !== 'undefined') {
       const base64 = await captureThumbnail();
       window.parent.postMessage({ type: 'CGA_SCREENSHOT_TAKEN', base64 }, '*');
     } else if (event.data?.type === 'CGA_INTERNAL_DRAG_OVER') {
-      // 💡 核心魔法：根據父視窗傳來的座標，找到 iframe 內部的元素
       const target = document.elementFromPoint(event.data.x, event.data.y);
       if (target && target !== window.__cgaLastHighlighted) {
         clearHighlight();
@@ -108,17 +102,10 @@ if (typeof window !== 'undefined') {
     } else if (event.data?.type === 'CGA_INTERNAL_DROP') {
       const target = document.elementFromPoint(event.data.x, event.data.y);
       if (target && window.__cgaDraggingApi) {
-        console.log("[CGA Inspector] Internal Drop detected on:", target.tagName);
         const dragData = window.__cgaDraggingApi;
         const resolvedPath = resolveExactPath(target);
         const info = getElementInfo(target);
-
-        window.parent.postMessage({ 
-            type: 'CGA_API_DROPPED', 
-            path: resolvedPath,
-            element: info,
-            api: dragData
-        }, '*');
+        window.parent.postMessage({ type: 'CGA_API_DROPPED', path: resolvedPath, element: info, api: dragData }, '*');
       }
       clearHighlight();
       window.__cgaDraggingApi = null;
@@ -126,9 +113,7 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('load', () => {
-    console.log("[CGA Inspector] Active and monitoring (with Shield-Overlay & Screenshot Support)...");
-
-    // 💡 點擊選取邏輯 (Click-to-Prompt)
+    console.log("[CGA Inspector] Active (with Modern Screenshot Support)...");
     document.addEventListener('click', (e) => {
       if (e.altKey || e.metaKey) {
         e.preventDefault(); e.stopPropagation();
