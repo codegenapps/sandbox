@@ -58,22 +58,24 @@ if (typeof window !== 'undefined') {
           });
       }
 
-      try {
-          // 💡 阻擋跨域的 CSS (例如 Google Fonts)，避免引發 SecurityError: cssRules 崩潰
-          const filter = (node) => {
-              if (node?.tagName === 'LINK' && node?.rel === 'stylesheet') {
-                  if (node.href && !node.href.startsWith(window.location.origin)) {
-                      return false;
-                  }
-              }
-              return true;
-          };
+      // 💡 終極防禦：暫時「癱瘓」所有跨域的 CSS，防止套件底層去讀取 cssRules 導致崩潰
+      const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+      const disabledLinks = [];
+      
+      links.forEach(link => {
+          if (link.href && !link.href.startsWith(window.location.origin)) {
+              // 把 href 暫時拔掉，或者把 rel 改掉，讓它不再是一個生效的 stylesheet
+              const originalHref = link.href;
+              disabledLinks.push({ el: link, href: originalHref });
+              link.removeAttribute('href'); 
+          }
+      });
 
+      try {
           // html-to-image 直接輸出 Base64 JPEG
           const dataUrl = await htmlToImage.toJpeg(document.body, { 
               quality: 0.5,
               backgroundColor: '#000',
-              filter, // 👈 注入過濾器
               // 縮小尺寸以節省容量
               width: document.body.offsetWidth,
               height: document.body.offsetHeight,
@@ -86,6 +88,11 @@ if (typeof window !== 'undefined') {
       } catch (e) {
           console.error("[CGA Inspector] Screenshot failed:", e);
           return null;
+      } finally {
+          // 💡 恢復原狀
+          disabledLinks.forEach(({ el, href }) => {
+              el.setAttribute('href', href);
+          });
       }
   };
 
