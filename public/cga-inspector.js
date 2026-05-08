@@ -84,7 +84,13 @@ if (typeof window !== 'undefined') {
     }, true);
 
     // 💡 拖曳 API 邏輯 (Drag-to-API - 跨 Iframe 支援)
-    document.body.addEventListener('dragover', (e) => {
+    document.addEventListener('dragenter', (e) => {
+        if (!window.__cgaDraggingApi) return;
+        e.preventDefault();
+        e.stopPropagation();
+    });
+
+    document.addEventListener('dragover', (e) => {
         if (!window.__cgaDraggingApi) return; // 只有在有拖曳 API 時才反應
         e.preventDefault(); 
         e.stopPropagation();
@@ -93,7 +99,7 @@ if (typeof window !== 'undefined') {
         e.target.style.backgroundColor = 'rgba(168, 85, 247, 0.1)';
     });
 
-    document.body.addEventListener('dragleave', (e) => {
+    document.addEventListener('dragleave', (e) => {
         if (!window.__cgaDraggingApi) return;
         e.preventDefault();
         e.stopPropagation();
@@ -102,7 +108,7 @@ if (typeof window !== 'undefined') {
         e.target.style.backgroundColor = '';
     });
 
-    document.body.addEventListener('drop', (e) => {
+    document.addEventListener('drop', (e) => {
         if (!window.__cgaDraggingApi) return;
         
         e.preventDefault();
@@ -112,6 +118,7 @@ if (typeof window !== 'undefined') {
         e.target.style.backgroundColor = '';
 
         try {
+            console.log("[CGA Inspector] Drop event triggered!", window.__cgaDraggingApi);
             // 💡 不依賴 e.dataTransfer (跨域會被擋)，直接讀取全域狀態
             const dragData = window.__cgaDraggingApi;
             if (dragData && dragData.type === 'CGA_API_DRAG') {
