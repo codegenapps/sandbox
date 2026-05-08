@@ -1,17 +1,24 @@
 import cga from '@codegenapps/frontend-sdk';
 
-// 💡 智慧環境變數讀取：自動相容 Next.js (process.env) 與 Vite (import.meta.env)
-const getEnv = (key: string) => {
-  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
+// 💡 智慧環境變數讀取：避免使用動態 key (import.meta.env[key])，因為 Vite 必須靜態替換字串
+const getApiUrl = () => {
+  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_CGA_API_URL) return process.env.NEXT_PUBLIC_CGA_API_URL;
   // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) return import.meta.env[key];
+  if (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_CGA_API_URL) return import.meta.env.NEXT_PUBLIC_CGA_API_URL;
+  return '';
+};
+
+const getApiKey = () => {
+  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_CGA_API_KEY) return process.env.NEXT_PUBLIC_CGA_API_KEY;
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_CGA_API_KEY) return import.meta.env.NEXT_PUBLIC_CGA_API_KEY;
   return '';
 };
 
 if (typeof window !== 'undefined') {
   cga.init({
-    baseUrl: getEnv('NEXT_PUBLIC_CGA_API_URL'),
-    apiKey: getEnv('NEXT_PUBLIC_CGA_API_KEY'),
+    baseUrl: getApiUrl(),
+    apiKey: getApiKey(),
     getToken: () => localStorage.getItem('access_token'),
     getRefreshToken: () => localStorage.getItem('refresh_token'),
     onTokensRefreshed: (accessToken: string, refreshToken: string) => {
