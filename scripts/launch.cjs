@@ -108,6 +108,18 @@ module.exports = function(babel) {
             needsWrite = true;
         }
 
+        // 💡 確保 Vite 允許外部連線 (E2B 沙盒必備)
+        if (!content.includes('allowedHosts')) {
+            if (content.includes('server: {')) {
+                // 如果已經有 server 區塊，塞進去
+                content = content.replace(/server:\s*\{/, `server: {\n    allowedHosts: true,`);
+            } else {
+                // 如果沒有 server 區塊，建一個新的
+                content = content.replace(/defineConfig\(\{/, `defineConfig({\n  server: { allowedHosts: true },`);
+            }
+            needsWrite = true;
+        }
+
         if (!content.includes('cga-plugin.cjs')) {
             const newReactCall = `react({ babel: { plugins: ['./cga-plugin.cjs'] } })`;
             
