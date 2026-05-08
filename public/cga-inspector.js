@@ -48,23 +48,34 @@ if (typeof window !== 'undefined') {
 
   // 💡 改用 html-to-image 以支援現代 CSS (oklab, oklch)
   const captureThumbnail = async () => {
-      if (typeof htmlToImage === 'undefined') {
+      if (typeof window.htmlToImage === 'undefined') {
           console.log("[CGA Inspector] Loading html-to-image for screenshot...");
-          await new Promise((resolve) => {
-              const script = document.createElement('script');
-              script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
-              script.onload = resolve;
-              document.head.appendChild(script);
-          });
+          try {
+              await new Promise((resolve, reject) => {
+                  const script = document.createElement('script');
+                  script.src = "https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js";
+                  script.onload = () => {
+                      console.log("[CGA Inspector] html-to-image loaded successfully.");
+                      resolve();
+                  };
+                  script.onerror = () => {
+                      console.error("[CGA Inspector] Failed to load html-to-image script.");
+                      reject(new Error("Script load failed"));
+                  };
+                  document.head.appendChild(script);
+              });
+          } catch (e) {
+              return null;
+          }
       }
 
+      console.log("[CGA Inspector] Disabling cross-origin stylesheets...");
       // 💡 終極防禦：暫時「癱瘓」所有跨域的 CSS，防止套件底層去讀取 cssRules 導致崩潰
       const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
       const disabledLinks = [];
       
       links.forEach(link => {
           if (link.href && !link.href.startsWith(window.location.origin)) {
-              // 把 href 暫時拔掉，或者把 rel 改掉，讓它不再是一個生效的 stylesheet
               const originalHref = link.href;
               disabledLinks.push({ el: link, href: originalHref });
               link.removeAttribute('href'); 
@@ -72,8 +83,9 @@ if (typeof window !== 'undefined') {
       });
 
       try {
+          console.log("[CGA Inspector] Starting toJpeg rendering...");
           // html-to-image 直接輸出 Base64 JPEG
-          const dataUrl = await htmlToImage.toJpeg(document.body, { 
+          const dataUrl = await window.htmlToImage.toJpeg(document.body, { 
               quality: 0.5,
               backgroundColor: '#000',
               // 縮小尺寸以節省容量
@@ -82,13 +94,20 @@ if (typeof window !== 'undefined') {
               style: {
                   transform: 'scale(0.5)',
                   transformOrigin: 'top left'
+              },
+              // 放寬過濾條件，強制過濾所有 iframe 或奇怪的節點
+              filter: (node) => {
+                 if (node.tagName === 'IFRAME') return false;
+                 return true;
               }
           });
+          console.log("[CGA Inspector] Rendering complete. Base64 length:", dataUrl.length);
           return dataUrl;
       } catch (e) {
           console.error("[CGA Inspector] Screenshot failed:", e);
           return null;
       } finally {
+          console.log("[CGA Inspector] Restoring stylesheets...");
           // 💡 恢復原狀
           disabledLinks.forEach(({ el, href }) => {
               el.setAttribute('href', href);
