@@ -46,7 +46,7 @@ if (typeof window !== 'undefined') {
       return info;
   };
 
-  // 💡 改用 html-to-image 以支援現代 CSS (oklab, oklch)
+  // 💡 改用 html-to-image 並實作智慧裁剪 (Smart-Crop)
   const captureThumbnail = async () => {
       if (typeof window.htmlToImage === 'undefined') {
           console.log("[CGA Inspector] Loading html-to-image for screenshot...");
@@ -70,7 +70,6 @@ if (typeof window !== 'undefined') {
       }
 
       console.log("[CGA Inspector] Disabling cross-origin stylesheets...");
-      // 💡 終極防禦：暫時「癱瘓」所有跨域的 CSS，防止套件底層去讀取 cssRules 導致崩潰
       const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
       const disabledLinks = [];
       
@@ -83,32 +82,28 @@ if (typeof window !== 'undefined') {
       });
 
       try {
-          console.log("[CGA Inspector] Starting toJpeg rendering...");
-          // html-to-image 直接輸出 Base64 JPEG
-          const dataUrl = await window.htmlToImage.toJpeg(document.body, { 
-              quality: 0.5,
-              backgroundColor: '#000',
-              // 縮小尺寸以節省容量
-              width: document.body.offsetWidth,
-              height: document.body.offsetHeight,
-              style: {
-                  transform: 'scale(0.5)',
-                  transformOrigin: 'top left'
-              },
-              // 放寬過濾條件，強制過濾所有 iframe 或奇怪的節點
+          console.log("[CGA Inspector] Starting Smart-Crop rendering...");
+          const width = document.body.offsetWidth;
+          const height = Math.floor(width * 0.75); // 4:3 比例高度
+
+          return await window.htmlToImage.toJpeg(document.body, { 
+              quality: 0.6,
+              pixelRatio: 1,      // 💡 1倍解析度，速度快且容量小
+              width: width,       // 擷取寬度
+              height: height,     // 只擷取上方 4:3 區域
+              canvasWidth: 400,   // 強制輸出寬度
+              canvasHeight: 300,  // 強制輸出高度
               filter: (node) => {
-                 if (node.tagName === 'IFRAME') return false;
+                 // 💡 略過 iframe 與 Canvas (解決 WebGL 全黑問題)
+                 if (node.tagName === 'IFRAME' || node.tagName === 'CANVAS') return false;
                  return true;
               }
           });
-          console.log("[CGA Inspector] Rendering complete. Base64 length:", dataUrl.length);
-          return dataUrl;
       } catch (e) {
           console.error("[CGA Inspector] Screenshot failed:", e);
           return null;
       } finally {
           console.log("[CGA Inspector] Restoring stylesheets...");
-          // 💡 恢復原狀
           disabledLinks.forEach(({ el, href }) => {
               el.setAttribute('href', href);
           });
@@ -150,7 +145,7 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('load', () => {
-    console.log("[CGA Inspector] Active (with Modern Screenshot Support)...");
+    console.log("[CGA Inspector] Active (with Smart-Crop Screenshot Support)...");
     document.addEventListener('click', (e) => {
       if (e.altKey || e.metaKey) {
         e.preventDefault(); e.stopPropagation();
