@@ -1,10 +1,13 @@
 if (typeof window !== 'undefined') {
   window.addEventListener('load', () => {
+    console.log("[CGA Inspector] Active and monitoring...");
     document.body.addEventListener('click', (e) => {
       if (e.altKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
         const target = e.target;
+        
+        console.log("[CGA Inspector] Clicked element:", target);
         
         let exactPath = null;
 
@@ -12,21 +15,22 @@ if (typeof window !== 'undefined') {
         const sourceElement = target.closest('[data-cga-path]');
         if (sourceElement) {
             exactPath = sourceElement.getAttribute('data-cga-path');
+            console.log("[CGA Inspector] Found data-cga-path:", exactPath);
+        } else {
+            console.log("[CGA Inspector] No data-cga-path found on element or ancestors.");
         }
 
         // 💡 2. Vite / React DevTools 內建屬性尋找 (透過 Fiber Tree)
         if (!exactPath) {
-            // React 18+ 內部屬性通常以 __reactFiber$ 開頭
+            // ... (rest of Fiber logic)
             const fiberKey = Object.keys(target).find(key => key.startsWith('__reactFiber$'));
             if (fiberKey) {
+                console.log("[CGA Inspector] Inspecting React Fiber Tree...");
                 let fiberNode = target[fiberKey];
-                // 往上找直到找到帶有 _debugSource 的節點
                 while (fiberNode && !exactPath) {
                     if (fiberNode._debugSource && fiberNode._debugSource.fileName) {
                         const fileName = fiberNode._debugSource.fileName;
-                        // 過濾掉 node_modules 內部的組件，只抓取 src/ 或 app/ 等使用者代碼
                         if (!fileName.includes('node_modules')) {
-                            // 擷取專案內的相對路徑 (假設 Vite 專案根目錄特徵)
                             const rootIndex = fileName.indexOf('/src/');
                             if (rootIndex !== -1) {
                                 exactPath = fileName.substring(rootIndex);
@@ -40,11 +44,12 @@ if (typeof window !== 'undefined') {
                     }
                     fiberNode = fiberNode.return;
                 }
+                if (exactPath) console.log("[CGA Inspector] Found path via Fiber:", exactPath);
             }
         }
         
-        // 💡 3. 降級方案：如果都沒抓到精準路徑，退回使用網址推測
         const resolvedPath = exactPath || window.location.pathname;
+        console.log("[CGA Inspector] Resolved final path:", resolvedPath);
 
         const tag = target.tagName.toLowerCase();
         let className = target.className;
@@ -57,7 +62,7 @@ if (typeof window !== 'undefined') {
         
         window.parent.postMessage({ 
             type: 'CGA_ELEMENT_SELECTED', 
-            path: resolvedPath, // 💡 使用解析後的最精準路徑
+            path: resolvedPath,
             element: info 
         }, '*');
         
