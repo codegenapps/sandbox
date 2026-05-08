@@ -99,8 +99,7 @@ function writeEnv(apiUrl, apiKey, docUrl, token) {
     let env = 'NEXT_PUBLIC_CGA_API_URL=' + apiUrl + '\n' +
                 'NEXT_PUBLIC_CGA_API_KEY=' + apiKey + '\n' +
                 'NEXT_PUBLIC_CGA_DOC_URL=' + docUrl + '\n' +
-                'CGA_ACCESS_TOKEN=' + token + '\n' + // 💡 確保後端 AI 工具能讀到管理員 Token
-                'NEXT_PUBLIC_IS_SANDBOX=true\n';
+                'CGA_ACCESS_TOKEN=' + token + '\n';
     if (process.env.GITHUB_ACCESS_TOKEN) {
         env += 'GITHUB_ACCESS_TOKEN=' + process.env.GITHUB_ACCESS_TOKEN + '\n';
     }

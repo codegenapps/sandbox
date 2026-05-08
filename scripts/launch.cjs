@@ -91,16 +91,38 @@ module.exports = function(babel) {
 
     if (targetConfigPath) {
         let content = fs.readFileSync(targetConfigPath, 'utf8');
+        let needsWrite = false;
+
+        // 💡 確保 Vite 能讀取 NEXT_PUBLIC_ 與 CGA_ 開頭的環境變數
+        if (!content.includes('envPrefix')) {
+            content = content.replace(/defineConfig\(\{/, `defineConfig({\n  envPrefix: ['VITE_', 'NEXT_PUBLIC_', 'CGA_'],`);
+            needsWrite = true;
+        }
+
+        // 💡 確保 Vite 支援 @/ alias (指向 /src) 以符合 AI 的 import { cga } from '@/api/cgaClient'
+        if (!content.includes('alias:') && !content.includes('alias :')) {
+            content = content.replace(/defineConfig\(\{/, `defineConfig({\n  resolve: { alias: { '@': path.resolve(__dirname, './src') } },`);
+            if (!content.includes("from 'path'") && !content.includes('from "path"')) {
+                content = `import path from 'path';\n` + content;
+            }
+            needsWrite = true;
+        }
+
         if (!content.includes('cga-plugin.cjs')) {
             const newReactCall = `react({ babel: { plugins: ['./cga-plugin.cjs'] } })`;
             
             if (content.includes('react()')) {
                  content = content.replace(/react\(\)/g, newReactCall);
-                 fs.writeFileSync(targetConfigPath, content);
+                 needsWrite = true;
                  log("Successfully injected Babel plugin into Vite config.");
             } else {
                  log("Could not find standard react() call in Vite config to inject Babel plugin.");
             }
+        }
+
+        if (needsWrite) {
+            fs.writeFileSync(targetConfigPath, content);
+            log("Vite config successfully updated with envPrefix and alias.");
         }
     } else {
         log("No vite.config found. Cannot inject Babel plugin.");
