@@ -93,7 +93,14 @@ if (typeof window !== 'undefined') {
               height: height,     // 只擷取上方 4:3 區域
               canvasWidth: 400,   // 強制輸出寬度
               canvasHeight: 300,  // 強制輸出高度
+              cacheBust: true,    // 💡 防止快取導致的 CORS 報錯
+              // 💡 提供一張透明佔位圖，當網頁有死圖或跨域圖片時，用這個替換而不會報錯崩潰！
+              imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
               filter: (node) => {
+                 // 💡 略過未載入完成或破圖的 img 標籤
+                 if (node.tagName === 'IMG') {
+                     if (!node.complete || node.naturalWidth === 0) return false;
+                 }
                  // 💡 略過 iframe 與 Canvas (解決 WebGL 全黑問題)
                  if (node.tagName === 'IFRAME' || node.tagName === 'CANVAS') return false;
                  return true;
