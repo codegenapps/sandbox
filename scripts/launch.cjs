@@ -31,10 +31,14 @@ const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
  * 💡 決定性邏輯：這部分僅負責生成輔助檔案，不修改用戶代碼
  */
 function ensureAuxiliaryFiles() {
+    const isNext = deps.next || scripts.dev?.includes('next dev');
+    const isVite = deps.vite || scripts.dev?.includes('vite');
+
     log("Ensuring auxiliary platform files...");
     
-    // 1. 生成 CGA Inspector Babel Plugin
-    const pluginCode = `
+    if (isVite) {
+        log("Vite detected: Generating cga-plugin.cjs for source mapping...");
+        const pluginCode = `
 module.exports = function(babel) {
   const { types: t } = babel;
   return {
@@ -53,16 +57,19 @@ module.exports = function(babel) {
     }
   };
 };`;
-    fs.writeFileSync(path.join(appDir, 'cga-plugin.cjs'), pluginCode);
+        fs.writeFileSync(path.join(appDir, 'cga-plugin.cjs'), pluginCode);
+    }
 
-    // 2. 如果是 Next.js，確保 .babelrc 存在 (因為 Next.js 優先讀取它)
-    if (deps.next || scripts.dev?.includes('next dev')) {
+    if (isNext) {
+        log("Next.js detected: Skipping .babelrc to preserve SWC compiler (Stability Protection).");
+        // 💡 主動檢查並清理可能殘留的 .babelrc，避免 Next.js 崩潰
         const babelRcPath = path.join(appDir, '.babelrc');
-        if (!fs.existsSync(babelRcPath)) {
-            fs.writeFileSync(babelRcPath, JSON.stringify({
-                presets: ["next/babel"],
-                plugins: ["./cga-plugin.cjs"]
-            }, null, 2));
+        if (fs.existsSync(babelRcPath)) {
+            const content = fs.readFileSync(babelRcPath, 'utf8');
+            if (content.includes('cga-plugin.cjs')) {
+                log("Removing incompatible legacy .babelrc...");
+                fs.unlinkSync(babelRcPath);
+            }
         }
     }
 }
