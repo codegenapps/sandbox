@@ -1,4 +1,36 @@
 if (typeof window !== 'undefined') {
+  // 💡 攔截並轉發 Console 訊息給主控台
+  if (!window.__cgaConsoleHooked) {
+      window.__cgaConsoleHooked = true;
+      const originalLog = console.log;
+      const originalWarn = console.warn;
+      const originalError = console.error;
+
+      const serializeArgs = (args) => {
+          return args.map(arg => {
+              if (typeof arg === 'object') {
+                  try { return JSON.stringify(arg); } catch(e) { return '[Object]'; }
+              }
+              return String(arg);
+          }).join(' ');
+      };
+
+      console.log = (...args) => {
+          if (!args[0]?.includes?.('[CGA Inspector]')) {
+              window.parent.postMessage({ type: 'CGA_CONSOLE_LOG', level: 'info', payload: serializeArgs(args) }, '*');
+          }
+          originalLog(...args);
+      };
+      console.warn = (...args) => {
+          window.parent.postMessage({ type: 'CGA_CONSOLE_LOG', level: 'warn', payload: serializeArgs(args) }, '*');
+          originalWarn(...args);
+      };
+      console.error = (...args) => {
+          window.parent.postMessage({ type: 'CGA_CONSOLE_LOG', level: 'error', payload: serializeArgs(args) }, '*');
+          originalError(...args);
+      };
+  }
+
   window.__cgaDraggingApi = null;
   window.__cgaLastHighlighted = null;
 
