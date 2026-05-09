@@ -8,8 +8,10 @@ if (typeof window !== 'undefined') {
 
       const serializeArgs = (args) => {
           return args.map(arg => {
+              if (arg === null) return 'null';
+              if (arg === undefined) return 'undefined';
               if (typeof arg === 'object') {
-                  try { return JSON.stringify(arg); } catch(e) { return '[Object]'; }
+                  try { return JSON.stringify(arg); } catch(e) { return '[Circular Object]'; }
               }
               return String(arg);
           }).join(' ');
@@ -29,6 +31,28 @@ if (typeof window !== 'undefined') {
           window.parent.postMessage({ type: 'CGA_CONSOLE_LOG', level: 'error', payload: serializeArgs(args) }, '*');
           originalError(...args);
       };
+
+      // 💡 監聽網址變化 (解決問題 1：網址列同步)
+      const notifyRouteChanged = () => {
+          window.parent.postMessage({ 
+              type: 'CGA_ROUTE_CHANGED', 
+              path: window.location.pathname + window.location.search 
+          }, '*');
+      };
+
+      const originalPushState = window.history.pushState;
+      window.history.pushState = function(...args) {
+          originalPushState.apply(this, args);
+          notifyRouteChanged();
+      };
+
+      const originalReplaceState = window.history.replaceState;
+      window.history.replaceState = function(...args) {
+          originalReplaceState.apply(this, args);
+          notifyRouteChanged();
+      };
+
+      window.addEventListener('popstate', notifyRouteChanged);
   }
 
   window.__cgaDraggingApi = null;
@@ -176,7 +200,14 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('load', () => {
-    console.log("[CGA Inspector] Active (with Smart-Crop Support)...");
+    console.log("[CGA Inspector] Active (with URL Sync Support)...");
+    
+    // 初始網址通報
+    window.parent.postMessage({ 
+        type: 'CGA_ROUTE_CHANGED', 
+        path: window.location.pathname + window.location.search 
+    }, '*');
+
     document.addEventListener('click', (e) => {
       if (e.altKey || e.metaKey) {
         e.preventDefault(); e.stopPropagation();
