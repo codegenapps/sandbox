@@ -94,7 +94,9 @@ if (typeof window !== 'undefined') {
       const tag = target.tagName.toLowerCase();
       let className = target.className;
       if (typeof className !== 'string') className = '';
-      const text = target.innerText ? target.innerText.substring(0, 30) : '';
+      
+      const text = target.innerText || '';
+      
       let info = '<' + tag;
       if (className) info += ' class="' + className + '"';
       info += '>';
