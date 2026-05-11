@@ -107,32 +107,21 @@ function generateApiSdk(apiDir, schemaContent) {
     const fs = require('fs');
     const path = require('path');
     
-    log('>>> Generating TypeScript API SDK from schema...');
+    log('>>> Generating TypeScript API SDK from schema (Single File Mode)...');
     try {
         // 1. 執行生成器 (產出到 apiDir/generated 目錄)
         const genDir = path.join(apiDir, 'generated');
-        if (!fs.existsSync(genDir)) fs.mkdirSync(genDir, { recursive: true });
+        // 💡 確保生成前清空舊的碎檔案，避免殘留的 modular 檔案混淆
+        if (fs.existsSync(genDir)) fs.rmSync(genDir, { recursive: true, force: true });
+        fs.mkdirSync(genDir, { recursive: true });
         
-        // 💡 修正關鍵：最新版 swagger-typescript-api 必須加上 "generate" 指令
+        // 💡 移除 --modular，改用單一檔案模式 (-n Api.ts)
         const schemaPath = path.join(apiDir, 'schema.json');
-        execSync(`npx swagger-typescript-api generate -p ${schemaPath} -o ${genDir} --axios --modular --route-types --unwrap-response-data`, { stdio: 'pipe' });
+        execSync(`npx swagger-typescript-api generate -p ${schemaPath} -o ${genDir} -n Api.ts --axios --route-types --unwrap-response-data`, { stdio: 'pipe' });
         
         // 2. 自動產生中央註冊表 (index.ts)
-        const files = fs.readdirSync(genDir).filter(f => f.endsWith('.ts') && f !== 'http-client.ts' && f !== 'data-contracts.ts');
-        
-        let imports = `import axios from 'axios';\n`;
-        let exports = `export const api = {\n`;
-        
-        files.forEach(file => {
-            const className = file.replace('.ts', '');
-            imports += `import { ${className} } from './generated/${className}';\n`;
-            // 將大寫開頭的 ClassName 轉為小寫開頭的屬性名 (例如 Users -> users)
-            const propName = className.charAt(0).toLowerCase() + className.slice(1);
-            exports += `  ${propName}: new ${className}({ instance: axiosInstance }),\n`;
-        });
-        exports += `};\n`;
-        
-        const setupContent = `${imports}
+        const setupContent = `import axios from 'axios';
+import { Api } from './generated/Api';
 
 // 💡 智慧環境變數讀取：避免使用動態 key (import.meta.env[key])，因為 Vite 必須靜態替換字串
 const getApiUrl = () => {
@@ -162,7 +151,7 @@ axiosInstance.interceptors.request.use((config) => {
   }
   
   if (token) {
-    config.headers.Authorization = \`Bearer \${token}\`;
+    config.headers.Authorization = 'Bearer ' + token;
   }
 
   // 🌟 注入全域 API KEY (重要：用於 Login 與基礎授權)
@@ -174,7 +163,7 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
-${exports}
+export const api = new Api({ instance: axiosInstance });
 `;
         fs.writeFileSync(path.join(apiDir, 'index.ts'), setupContent);
         log('>>> API SDK and Central Registry (api/index.ts) generated successfully.');
