@@ -15,7 +15,6 @@ export default function App({ Component, pageProps }: AppProps) {
       <Head>
         <title>CGA Shadow Node</title>
       </Head>
-      <Script src="/cga-inspector.js" strategy="afterInteractive" />
       <NextUIProvider navigate={router.push}>
         <main className='dark text-foreground bg-background min-h-screen' suppressHydrationWarning>
           <Component {...pageProps} />
