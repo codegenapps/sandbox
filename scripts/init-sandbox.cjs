@@ -113,7 +113,9 @@ function generateApiSdk(apiDir, schemaContent) {
         const genDir = path.join(apiDir, 'generated');
         if (!fs.existsSync(genDir)) fs.mkdirSync(genDir, { recursive: true });
         
-        execSync(`npx swagger-typescript-api -p ${apiDir}/schema.json -o ${genDir} --axios --modular --route-types --unwrap-response-data`, { stdio: 'pipe' });
+        // 💡 修正關鍵：最新版 swagger-typescript-api 必須加上 "generate" 指令
+        const schemaPath = path.join(apiDir, 'schema.json');
+        execSync(`npx swagger-typescript-api generate -p ${schemaPath} -o ${genDir} --axios --modular --route-types --unwrap-response-data`, { stdio: 'pipe' });
         
         // 2. 自動產生中央註冊表 (index.ts)
         const files = fs.readdirSync(genDir).filter(f => f.endsWith('.ts') && f !== 'http-client.ts' && f !== 'data-contracts.ts');
