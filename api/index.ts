@@ -4,16 +4,20 @@ import { Api } from './generated/Api';
 
 // 💡 智慧環境變數讀取：避免使用動態 key (import.meta.env[key])，因為 Vite 必須靜態替換字串
 const getApiUrl = () => {
-  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_CGA_API_URL) return process.env.NEXT_PUBLIC_CGA_API_URL;
+  // 1. 優先嘗試 Node.js / Next.js SSR 環境
+  if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_CGA_API_URL) return process.env.NEXT_PUBLIC_CGA_API_URL;
+  // 2. 嘗試 Vite / 瀏覽器環境 (靜態分析必須完整寫出 import.meta.env)
   // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_CGA_API_URL) return import.meta.env.NEXT_PUBLIC_CGA_API_URL;
+  if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_URL) return import.meta.env.NEXT_PUBLIC_CGA_API_URL;
   return '';
 };
 
 const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_CGA_API_KEY) return process.env.NEXT_PUBLIC_CGA_API_KEY;
+  // 1. 優先嘗試 Node.js / Next.js SSR 環境
+  if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_CGA_API_KEY) return process.env.NEXT_PUBLIC_CGA_API_KEY;
+  // 2. 嘗試 Vite / 瀏覽器環境
   // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_CGA_API_KEY) return import.meta.env.NEXT_PUBLIC_CGA_API_KEY;
+  if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_KEY) return import.meta.env.NEXT_PUBLIC_CGA_API_KEY;
   return '';
 };
 
