@@ -2,33 +2,48 @@ import axios from 'axios';
 // @ts-ignore
 import { Api } from './generated/Api';
 
-// 💡 智慧環境變數讀取：避免使用動態 key (import.meta.env[key])，因為 Vite 必須靜態替換字串
 const getApiUrl = () => {
-  // 1. 優先嘗試 Node.js / Next.js SSR 環境
-  if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_CGA_API_URL) return process.env.NEXT_PUBLIC_CGA_API_URL;
-  // 2. 嘗試 Vite / 瀏覽器環境 (靜態分析必須完整寫出 import.meta.env)
-  // @ts-ignore
-  if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_URL) return import.meta.env.NEXT_PUBLIC_CGA_API_URL;
+  // 1. Node.js / Next.js 環境
+  if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_CGA_API_URL) {
+    return process.env.NEXT_PUBLIC_CGA_API_URL;
+  }
+  // 2. Vite / ESM 環境
+  try {
+    // @ts-ignore
+    if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_URL) {
+      // @ts-ignore
+      return import.meta.env.NEXT_PUBLIC_CGA_API_URL;
+    }
+  } catch (e) {}
   return '';
 };
 
 const getApiKey = () => {
-  // 1. 優先嘗試 Node.js / Next.js SSR 環境
-  if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_CGA_API_KEY) return process.env.NEXT_PUBLIC_CGA_API_KEY;
-  // 2. 嘗試 Vite / 瀏覽器環境
-  // @ts-ignore
-  if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_KEY) return import.meta.env.NEXT_PUBLIC_CGA_API_KEY;
+  // 1. Node.js / Next.js 環境
+  if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_CGA_API_KEY) {
+    return process.env.NEXT_PUBLIC_CGA_API_KEY;
+  }
+  // 2. Vite / ESM 環境
+  try {
+    // @ts-ignore
+    if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.NEXT_PUBLIC_CGA_API_KEY;
+    }
+  } catch (e) {}
   return '';
 };
 
-const axiosInstance = axios.create({
-  baseURL: getApiUrl(),
+const cgaBaseUrl = getApiUrl();
+
+// 💡 1. 直接實例化 Api，將 baseURL 傳入，讓 SDK 底層自己建立正確的 Axios instance
+export const api = new Api({
+  baseURL: cgaBaseUrl,
 });
 
-// 自動攔截並注入 Token 與 API Key
-axiosInstance.interceptors.request.use((config) => {
+// 💡 2. 直接對 SDK 內部的 axios 實體掛載攔截器
+api.instance.interceptors.request.use((config) => {
   let token = '';
-  // 嘗試從 localStorage 或 sessionStorage 拿 token (適應大部分前端環境)
   if (typeof window !== 'undefined') {
     token = localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('access_token') || '';
   }
@@ -37,7 +52,6 @@ axiosInstance.interceptors.request.use((config) => {
     config.headers.Authorization = 'Bearer ' + token;
   }
 
-  // 🌟 注入全域 API KEY (重要：用於 Login 與基礎授權)
   const apiKey = getApiKey();
   if (apiKey) {
     config.headers['x-api-key'] = apiKey;
@@ -45,5 +59,3 @@ axiosInstance.interceptors.request.use((config) => {
   
   return config;
 });
-
-export const api = new Api({ instance: axiosInstance });
