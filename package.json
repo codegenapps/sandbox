@@ -25,7 +25,6 @@
   },
   "homepage": "https://github.com/codegenapps/sandbox#readme",
   "dependencies": {
-    "@codegenapps/frontend-sdk": "latest",
     "@nextui-org/react": "^2.6.11",
     "@tanstack/react-query": "^5.100.9",
     "@types/node": "^25.6.0",
@@ -41,6 +40,7 @@
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^3.4.17",
+    "ts-morph": "^25.0.0",
     "typescript": "^5.9.3"
   }
 }
