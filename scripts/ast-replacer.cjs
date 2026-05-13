@@ -3,16 +3,22 @@ const fs = require('fs');
 
 /**
  * AST 精準替換引擎 (Sandbox 版)
- * 用法: node ast-replacer.cjs <filePath> <targetSignature> <newCodeBase64>
+ * 用法: node ast-replacer.cjs <filePath> <targetSignature> <newCodeBase64> [--base64]
  */
 
 const filePath = process.argv[2];
-const targetSignature = process.argv[3]; // 例如 "<form id=\"contact\" class=\"flex\">"
+let targetSignature = process.argv[3];
 const newCodeBase64 = process.argv[4];
+const isBase64Mode = process.argv[5] === '--base64';
 
 if (!filePath || !targetSignature || !newCodeBase64) {
-    console.error("Usage: node ast-replacer.cjs <filePath> <targetSignature> <newCodeBase64>");
+    console.error("Usage: node ast-replacer.cjs <filePath> <targetSignature> <newCodeBase64> [--base64]");
     process.exit(1);
+}
+
+// 💡 支援 DNA 特徵的解碼
+if (isBase64Mode) {
+    targetSignature = Buffer.from(targetSignature, 'base64').toString('utf8');
 }
 
 const newCode = Buffer.from(newCodeBase64, 'base64').toString('utf8');
@@ -56,8 +62,9 @@ sourceFile.forEachDescendant(node => {
             if (targetId) {
                 requiredScore++;
                 const idAttr = node.getAttribute('id');
-                if (idAttr && idAttr.getInitializer().getText().replace(/['"]/g, '') === targetId) {
-                    score++;
+                if (idAttr) {
+                    const idVal = idAttr.getInitializer()?.getText().replace(/['"]/g, '');
+                    if (idVal === targetId) score++;
                 }
             }
 
@@ -65,17 +72,18 @@ sourceFile.forEachDescendant(node => {
             if (targetName) {
                 requiredScore++;
                 const nameAttr = node.getAttribute('name');
-                if (nameAttr && nameAttr.getInitializer().getText().replace(/['"]/g, '') === targetName) {
-                    score++;
+                if (nameAttr) {
+                    const nameVal = nameAttr.getInitializer()?.getText().replace(/['"]/g, '');
+                    if (nameVal === targetName) score++;
                 }
             }
 
-            // 比對 Class (模糊匹配，因為 React 是 className)
+            // 比對 Class (模糊匹配，優先看 className)
             if (targetClass) {
                 requiredScore++;
                 const classAttr = node.getAttribute('className') || node.getAttribute('class');
                 if (classAttr) {
-                    const actualClass = classAttr.getInitializer().getText().replace(/['"]/g, '');
+                    const actualClass = classAttr.getInitializer()?.getText().replace(/['"]/g, '') || "";
                     // 只要包含主要類別即算匹配
                     if (actualClass.includes(targetClass.split(' ')[0])) {
                         score++;
@@ -93,7 +101,6 @@ sourceFile.forEachDescendant(node => {
 
 // 4. 執行替換
 if (foundNode) {
-    // 如果是 JsxOpeningElement，則要替換整個 JsxElement (包含子元素)
     const nodeToReplace = foundNode.getKind() === SyntaxKind.JsxOpeningElement 
         ? foundNode.getParent() 
         : foundNode;
@@ -103,5 +110,5 @@ if (foundNode) {
     console.log("SUCCESS");
 } else {
     console.log("AST_MISMATCH");
-    process.exit(0); // 交給後端降級機制處理
+    process.exit(0);
 }
