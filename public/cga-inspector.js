@@ -92,12 +92,20 @@ if (typeof window !== 'undefined') {
   const getElementInfo = (target) => {
       if (!target) return "";
       const tag = target.tagName.toLowerCase();
+      
       let className = target.className;
       if (typeof className !== 'string') className = '';
       
-      const text = target.innerText || '';
+      const id = target.id || '';
+      const name = target.getAttribute('name') || '';
+      
+      // 💡 提取精簡內文作為特徵 (移除換行，限制長度)
+      let text = (target.innerText || '').replace(/\n/g, ' ').trim();
+      if (text.length > 50) text = text.substring(0, 50) + '...';
       
       let info = '<' + tag;
+      if (id) info += ' id="' + id + '"';
+      if (name) info += ' name="' + name + '"';
       if (className) info += ' class="' + className + '"';
       info += '>';
       if (text) info += text + '</' + tag + '>';
