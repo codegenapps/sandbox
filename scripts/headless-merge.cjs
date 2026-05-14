@@ -68,12 +68,59 @@ function fromPostgres(sql, currentTables) {
             }
             const rest = partsMatch[3];
             const isPrimary = rest.toUpperCase().includes('PRIMARY KEY');
-            const field = { id: nanoid(), name: colName, type: type, size: size, primary: isPrimary, notNull: rest.toUpperCase().includes('NOT NULL') || isPrimary, unique: rest.toUpperCase().includes('UNIQUE'), increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'), default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "", comment: comments[`${tableName}.${colName}`] || comments[colName] || "" };
+            const field = { id: nanoid(), name: colName, type: type, size: size, primary: isPrimary, notNull: rest.toUpperCase().includes('NOT NULL') || isPrimary, unique: rest.toUpperCase().includes('UNIQUE'), increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'), default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "", comment: comments[tableName + "." + colName] || comments[colName] || "" };
             if (colName === 'id') { field.type = 'INTEGER'; field.primary = true; field.increment = true; }
             table.fields.push(field);
         });
         tables.push(table);
     }
+    
+    // Add ALTER TABLE parsing
+    const alterRegex = /ALTER TABLE "?(\w+)"? ADD(?: COLUMN)? "?(\w+)"?\s+([\w]+(?:\([\d, ]+\))?)(.*?);/gi;
+    let alterMatch;
+    while ((alterMatch = alterRegex.exec(sql)) !== null) {
+        const tableName = alterMatch[1];
+        const colName = alterMatch[2];
+        let typeFull = alterMatch[3].toUpperCase();
+        typeFull = typeFull.replace(/\(\s*(\d+)\s*,\s*(\d+)\s*\)/, '($1,$2)');
+        let type = typeFull, size = "";
+        if (typeFull.includes('(')) {
+            const s = typeFull.match(/(\w+)\((.*?)\)/);
+            if (s) { type = s[1]; size = s[2].replace(/\s/g, ''); }
+        }
+        const rest = alterMatch[4] || "";
+        const isPrimary = rest.toUpperCase().includes('PRIMARY KEY');
+        const field = { 
+            id: nanoid(), 
+            name: colName, 
+            type: type, 
+            size: size, 
+            primary: isPrimary, 
+            notNull: rest.toUpperCase().includes('NOT NULL') || isPrimary, 
+            unique: rest.toUpperCase().includes('UNIQUE'), 
+            increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'), 
+            default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "", 
+            comment: comments[tableName + "." + colName] || comments[colName] || "" 
+        };
+        
+        let targetTable = tables.find(t => t.name === tableName);
+        if (!targetTable && currentTables) {
+            const extTable = currentTables.find(t => t.name === tableName);
+            if (extTable) {
+                targetTable = JSON.parse(JSON.stringify(extTable));
+                tables.push(targetTable);
+            }
+        }
+        if (targetTable) {
+            const existingFieldIdx = targetTable.fields.findIndex(f => f.name === colName);
+            if (existingFieldIdx !== -1) {
+                targetTable.fields[existingFieldIdx] = { ...targetTable.fields[existingFieldIdx], ...field };
+            } else {
+                targetTable.fields.push(field);
+            }
+        }
+    }
+
     return { tables, relationships };
 }
 
@@ -177,7 +224,14 @@ async function run() {
         result.tables.forEach(t => {
            if (tableMap.has(t.name)) {
                const existing = tableMap.get(t.name);
-               tableMap.set(t.name, { ...existing, fields: t.fields, comment: t.comment, indices: t.indices });
+               
+               // 💡 智慧合併策略：避免 ALTER TABLE 覆寫掉現有的完整設定
+               const mergedComment = t.comment ? t.comment : existing.comment;
+               const mergedIndices = (t.indices && t.indices.length > 0) ? t.indices : existing.indices;
+               
+               // 對於欄位，如果 targetTable 是從 currentTables 拷貝來的，t.fields 已經包含了所有舊欄位+新欄位
+               // 但為保險起見，我們還是把 t.fields 直接覆寫過去，因為前面的邏輯已經做了 merge
+               tableMap.set(t.name, { ...existing, fields: t.fields, comment: mergedComment, indices: mergedIndices });
            } else {
                // 💡 終極相容修正：同時寫入根部 x,y 與 position 物件
                maxX += 150;
