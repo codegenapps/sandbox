@@ -76,7 +76,7 @@ function fromPostgres(sql, currentTables) {
     }
     
     // Add ALTER TABLE parsing
-    const alterRegex = /ALTER TABLE "?(\w+)"? ADD(?: COLUMN)? "?(\w+)"?\s+([\w]+(?:\([\d, ]+\))?)(.*?);/gi;
+    const alterRegex = /ALTER TABLE\s+"?(\w+)"?\s+ADD(?:\s+COLUMN)?\s+"?(\w+)"?\s+([\w]+(?:\([\d, ]+\))?)([\s\S]*?);/gi;
     let alterMatch;
     while ((alterMatch = alterRegex.exec(sql)) !== null) {
         const tableName = alterMatch[1];
