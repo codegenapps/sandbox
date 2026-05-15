@@ -221,6 +221,17 @@ if (typeof window !== 'undefined') {
     // --- 🕵️‍♂️ 狀態化偵測機制 (Stateful Discovery) ---
     let isScanningPaused = false;
     const scannedGaps = new Set();
+    let currentHighlightedGapEl = null;
+
+    const clearGapHighlight = () => {
+        if (currentHighlightedGapEl) {
+            currentHighlightedGapEl.style.outline = '';
+            currentHighlightedGapEl.style.outlineOffset = '';
+            currentHighlightedGapEl.style.backgroundColor = '';
+            currentHighlightedGapEl.style.boxShadow = '';
+            currentHighlightedGapEl = null;
+        }
+    };
 
     const getFiberProps = (target) => {
         const fiberKey = Object.keys(target).find(key => key.startsWith('__reactFiber$'));
@@ -250,13 +261,16 @@ if (typeof window !== 'undefined') {
 
             if (el.tagName === 'BUTTON') {
                 if (!props?.onClick || isNoop(props.onClick)) {
+                    // 若按鈕是在表單內且 type 是 submit，則略過，交由 form 來偵測
+                    if (props?.type === 'submit' && el.closest('form')) continue;
+                    
                     isUnbound = true;
-                    reason = "按鈕尚未綁定點擊邏輯";
+                    reason = "按鈕缺乏點擊功能";
                 }
             } else if (el.tagName === 'FORM') {
                 if (!props?.onSubmit || isNoop(props.onSubmit)) {
                     isUnbound = true;
-                    reason = "表單尚未綁定提交邏輯";
+                    reason = "表單缺乏送出邏輯";
                 }
             }
 
@@ -264,8 +278,13 @@ if (typeof window !== 'undefined') {
                 isScanningPaused = true;
                 scannedGaps.add(fingerprint);
                 
-                // 標記該元素以便前端高亮
-                el.style.boxShadow = '0 0 0 4px rgba(234, 179, 8, 0.3)';
+                // 💡 標記該元素以便前端高亮 (仿造 Drag & Drop 效果，但顏色不同)
+                clearGapHighlight();
+                el.style.outline = '2px dashed #3b82f6'; // 藍色虛線
+                el.style.outlineOffset = '4px';
+                el.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'; // 淺藍色背景
+                el.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)'; // 發光效果
+                currentHighlightedGapEl = el;
                 
                 window.parent.postMessage({
                     type: 'CGA_AURA_REPORT',
@@ -286,8 +305,13 @@ if (typeof window !== 'undefined') {
         if (event.data?.type === 'CGA_RESUME_SCAN') {
             console.log("[CGA Inspector] Resuming scan...");
             isScanningPaused = false;
+            clearGapHighlight(); // 💡 收到繼續指令時，清除高亮
             // 延遲一下再掃描，避免 UI 閃爍
             setTimeout(scanNextGap, 1000);
+        } else if (event.data?.type === 'CGA_SCROLL_TO_GAP') {
+            if (currentHighlightedGapEl) {
+                currentHighlightedGapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
     });
 
