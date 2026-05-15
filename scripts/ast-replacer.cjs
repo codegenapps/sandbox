@@ -105,13 +105,33 @@ sourceFile.forEachDescendant(node => {
     }
 });
 
-// 4. 執行替換
+// 4. 執行替換與預先驗證 (Pre-flight Validation)
 if (bestNode) {
     const nodeToReplace = bestNode.getKind() === SyntaxKind.JsxOpeningElement 
         ? bestNode.getParent() 
         : bestNode;
 
+    // 先在內存中進行替換
     nodeToReplace.replaceWithText(newCode);
+
+    // 🔬 極限防禦：語法樹校驗
+    const diagnostics = sourceFile.getPreEmitDiagnostics();
+    
+    // 只攔截「語法錯誤 (Syntax Error)」或「未閉合標籤」，忽略一般的 Type Error
+    const fatalErrors = diagnostics.filter(d => {
+        const category = d.getCategory(); // 1 是 Error
+        const code = d.getCode();
+        // 這些 TS Error Code 代表基本的語法結構被破壞了 (例如少括號、少標籤)
+        return category === 1 && (code === 1005 || code >= 1100 && code <= 1184 || code === 1381);
+    });
+
+    if (fatalErrors.length > 0) {
+        const errorMsg = fatalErrors.map(e => e.getMessageText()).join(" | ");
+        console.log("SYNTAX_ERROR: " + errorMsg);
+        process.exit(0); // 正常退出，但帶有錯誤標記，交給 Go 處理
+    }
+
+    // 驗證通過，正式寫入磁碟
     sourceFile.saveSync();
     console.log("SUCCESS");
 } else {
