@@ -28,7 +28,28 @@ if (typeof window !== 'undefined') {
           originalWarn(...args);
       };
       console.error = (...args) => {
-          window.parent.postMessage({ type: 'CGA_CONSOLE_LOG', level: 'error', payload: serializeArgs(args) }, '*');
+          const msg = serializeArgs(args);
+          window.parent.postMessage({ type: 'CGA_CONSOLE_LOG', level: 'error', payload: msg }, '*');
+          
+          if (typeof auditorConfig !== 'undefined' && auditorConfig?.runtimeError && !isScanningPaused && !msg.includes('[CGA Inspector]')) {
+              // 防抖：只抓取前面一點點作為指紋，防止同樣的錯誤狂噴
+              const fingerprint = `ERROR_${msg.replace(/\n/g, '').substring(0, 30)}`;
+              if (typeof scannedGaps !== 'undefined' && !scannedGaps.has(fingerprint)) {
+                  isScanningPaused = true;
+                  scannedGaps.add(fingerprint);
+                  clearGapHighlight(); // 錯誤通常是全域的，不畫框
+                  window.parent.postMessage({
+                      type: 'CGA_AURA_REPORT',
+                      payload: {
+                          fingerprint,
+                          category: 'RUNTIME_ERROR',
+                          reason: '主控台發生執行期錯誤',
+                          element: msg.substring(0, 150) + (msg.length > 150 ? '...' : ''),
+                          path: window.location.pathname
+                      }
+                  }, '*');
+              }
+          }
           originalError(...args);
       };
 
@@ -222,6 +243,18 @@ if (typeof window !== 'undefined') {
     let isScanningPaused = false;
     const scannedGaps = new Set();
     let currentHighlightedGapEl = null;
+    let auditorConfig = {
+        enabled: true,
+        apiBinding: true,
+        staticList: false,
+        deadLink: false,
+        seoMeta: false,
+        imageAudit: false,
+        responsive: false,
+        darkMode: false,
+        inputValidation: false,
+        runtimeError: false
+    };
 
     const clearGapHighlight = () => {
         if (currentHighlightedGapEl) {
@@ -246,57 +279,139 @@ if (typeof window !== 'undefined') {
     };
 
     const scanNextGap = () => {
-        if (isScanningPaused) return;
+        if (isScanningPaused || !auditorConfig.enabled) return;
 
-        // 尋找潛在的交互元素：button, a, form
-        const candidates = document.querySelectorAll('button, a, form');
-        
-        for (const el of candidates) {
-            const fingerprint = `${window.location.pathname}_${el.tagName}_${el.innerText.trim().substring(0, 10)}`;
-            if (scannedGaps.has(fingerprint)) continue;
+        // 收集所有潛在需要檢查的元素
+        const selectors = [];
+        if (auditorConfig.apiBinding) selectors.push('button', 'form');
+        if (auditorConfig.deadLink) selectors.push('a');
+        if (auditorConfig.imageAudit) selectors.push('img');
+        if (auditorConfig.inputValidation) selectors.push('input:not([type="hidden"]):not([type="submit"]):not([type="button"])', 'textarea');
+        if (auditorConfig.darkMode) selectors.push('[class*="text-[#"]', '[class*="bg-[#"]', '.text-black', '.bg-white');
+        if (auditorConfig.staticList) selectors.push('ul', '.grid', '.flex');
+        // responsive 不用 querySelector，改在後面獨立判斷
 
-            const props = getFiberProps(el);
-            let isUnbound = false;
-            let reason = "";
+        if (selectors.length > 0) {
+            const candidates = document.querySelectorAll(selectors.join(', '));
+            
+            for (const el of candidates) {
+                const fingerprint = `${window.location.pathname}_${el.tagName}_${(el.innerText || el.src || el.href || '').trim().substring(0, 15)}_${el.className.substring(0, 10)}`;
+                if (scannedGaps.has(fingerprint)) continue;
 
-            if (el.tagName === 'BUTTON') {
-                if (!props?.onClick || isNoop(props.onClick)) {
-                    // 若按鈕是在表單內且 type 是 submit，則略過，交由 form 來偵測
-                    if (props?.type === 'submit' && el.closest('form')) continue;
-                    
-                    isUnbound = true;
-                    reason = "按鈕缺乏點擊功能";
+                const props = getFiberProps(el);
+                let isUnbound = false;
+                let reason = "";
+                let category = "";
+
+                // 1. API 綁定偵測 (按鈕與表單)
+                if (auditorConfig.apiBinding) {
+                    if (el.tagName === 'BUTTON') {
+                        if (!props?.onClick || isNoop(props.onClick)) {
+                            if (!(props?.type === 'submit' && el.closest('form'))) {
+                                isUnbound = true; category = "API_BINDING"; reason = "按鈕缺乏點擊功能";
+                            }
+                        }
+                    } else if (el.tagName === 'FORM') {
+                        if (!props?.onSubmit || isNoop(props.onSubmit)) {
+                            isUnbound = true; category = "API_BINDING"; reason = "表單缺乏送出邏輯";
+                        }
+                    }
                 }
-            } else if (el.tagName === 'FORM') {
-                if (!props?.onSubmit || isNoop(props.onSubmit)) {
-                    isUnbound = true;
-                    reason = "表單缺乏送出邏輯";
+
+                // 2. 無效連結偵測 (Dead Link)
+                if (!isUnbound && auditorConfig.deadLink && el.tagName === 'A') {
+                    const href = el.getAttribute('href');
+                    if (!href || href === '#' || href.includes('javascript:void')) {
+                        isUnbound = true; category = "DEAD_LINK"; reason = "超連結缺乏有效的 href 路徑";
+                    }
+                }
+
+                // 3. 圖片無障礙偵測 (Image Audit)
+                if (!isUnbound && auditorConfig.imageAudit && el.tagName === 'IMG') {
+                    const alt = el.getAttribute('alt');
+                    if (alt === null || alt.trim() === '') {
+                        isUnbound = true; category = "IMAGE_AUDIT"; reason = "圖片缺乏 alt 無障礙標籤";
+                    }
+                }
+
+                // 4. 輸入框驗證偵測 (Input Validation)
+                if (!isUnbound && auditorConfig.inputValidation && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+                    const hasRequired = el.hasAttribute('required');
+                    const hasPattern = el.hasAttribute('pattern');
+                    // 如果在表單內，但沒有任何基礎原生的驗證
+                    if (!hasRequired && !hasPattern && el.closest('form')) {
+                        isUnbound = true; category = "INPUT_VALIDATION"; reason = "輸入框缺乏 required 屬性或基礎驗證規範";
+                    }
+                }
+
+                // 5. 硬編碼顏色偵測 (Dark Mode Safety)
+                if (!isUnbound && auditorConfig.darkMode) {
+                    const cls = typeof el.className === 'string' ? el.className : '';
+                    if (cls.includes('text-[#') || cls.includes('bg-[#') || (cls.includes('text-black') && !cls.includes('dark:text-'))) {
+                        isUnbound = true; category = "DARK_MODE"; reason = "使用強制色碼，深色模式切換時可能難以閱讀";
+                    }
+                }
+
+                // 6. 靜態列表偵測 (Static List)
+                if (!isUnbound && auditorConfig.staticList && (el.tagName === 'UL' || (typeof el.className === 'string' && (el.className.includes('grid') || el.className.includes('flex'))))) {
+                    const children = el.children;
+                    if (children.length >= 3) {
+                        const c1 = children[0], c2 = children[1], c3 = children[2];
+                        if (c1.tagName === c2.tagName && c2.tagName === c3.tagName && c1.className === c2.className && c1.className !== '') {
+                            isUnbound = true; category = "STATIC_LIST"; reason = "發現多個結構高度重複的子元件，疑似未採用動態渲染";
+                        }
+                    }
+                }
+
+                if (isUnbound) {
+                    isScanningPaused = true;
+                    scannedGaps.add(fingerprint);
+                    
+                    clearGapHighlight();
+                    el.style.outline = '2px dashed #3b82f6';
+                    el.style.outlineOffset = '4px';
+                    el.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                    el.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)';
+                    currentHighlightedGapEl = el;
+                    
+                    window.parent.postMessage({
+                        type: 'CGA_AURA_REPORT',
+                        payload: {
+                            fingerprint,
+                            category,
+                            reason,
+                            element: getElementInfo(el),
+                            path: resolveExactPath(el)
+                        }
+                    }, '*');
+                    console.log(`[CGA Inspector] Gap found [${category}] and paused:`, reason);
+                    return; // 找到一個就停止
                 }
             }
+        }
 
-            if (isUnbound) {
-                isScanningPaused = true;
-                scannedGaps.add(fingerprint);
-                
-                // 💡 標記該元素以便前端高亮 (仿造 Drag & Drop 效果，但顏色不同)
-                clearGapHighlight();
-                el.style.outline = '2px dashed #3b82f6'; // 藍色虛線
-                el.style.outlineOffset = '4px';
-                el.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'; // 淺藍色背景
-                el.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)'; // 發光效果
-                currentHighlightedGapEl = el;
-                
-                window.parent.postMessage({
-                    type: 'CGA_AURA_REPORT',
-                    payload: {
-                        fingerprint,
-                        reason,
-                        element: getElementInfo(el),
-                        path: resolveExactPath(el)
-                    }
-                }, '*');
-                console.log("[CGA Inspector] Gap found and paused:", reason);
-                return; // 找到一個就停止
+        // 7. 響應式溢出偵測 (Responsive Overflow)
+        if (auditorConfig.responsive) {
+            const docWidth = document.documentElement.scrollWidth;
+            const winWidth = window.innerWidth;
+            if (docWidth > winWidth + 10) { // 容忍 10px 誤差
+                const fingerprint = `OVERFLOW_${window.location.pathname}`;
+                if (!scannedGaps.has(fingerprint)) {
+                    isScanningPaused = true;
+                    scannedGaps.add(fingerprint);
+                    window.parent.postMessage({
+                        type: 'CGA_AURA_REPORT',
+                        payload: {
+                            fingerprint,
+                            category: "RESPONSIVE_OVERFLOW",
+                            reason: `頁面寬度 (${docWidth}px) 超出螢幕寬度 (${winWidth}px)，出現水平滾動條`,
+                            element: "document.documentElement",
+                            path: window.location.pathname
+                        }
+                    }, '*');
+                    console.log(`[CGA Inspector] Overflow gap found`);
+                    return;
+                }
             }
         }
     };
@@ -311,6 +426,15 @@ if (typeof window !== 'undefined') {
         } else if (event.data?.type === 'CGA_SCROLL_TO_GAP') {
             if (currentHighlightedGapEl) {
                 currentHighlightedGapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        } else if (event.data?.type === 'CGA_SET_AUDITOR_CONFIG') {
+            auditorConfig = event.data.payload;
+            console.log("[CGA Inspector] Auditor config updated:", auditorConfig);
+            if (auditorConfig.enabled && !isScanningPaused) {
+                scanNextGap();
+            } else if (!auditorConfig.enabled) {
+                clearGapHighlight();
+                // 隱藏目前警告的邏輯會由 React 端處理，這裡只需清除高亮
             }
         }
     });
