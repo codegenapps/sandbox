@@ -376,6 +376,9 @@ if (typeof window !== 'undefined') {
                     el.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)';
                     currentHighlightedGapEl = el;
                     
+                    // 💡 找到缺口時，自動捲動到使用者眼前 (置中顯示)
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
                     window.parent.postMessage({
                         type: 'CGA_AURA_REPORT',
                         payload: {
@@ -457,14 +460,115 @@ if (typeof window !== 'undefined') {
     // 初始掃描與 DOM 變動監聽
     setTimeout(scanNextGap, 3000); // 給 React 一點渲染時間
 
+    // --- ✨ 新增：DOM Element Highlighting (Hover Inspector) ---
+    let hoverBox = null;
+    let hoverLabel = null;
+
+    const createHoverBox = () => {
+        if (hoverBox) return;
+        hoverBox = document.createElement('div');
+        hoverBox.id = 'cga-hover-box';
+        hoverBox.style.cssText = `
+            position: fixed !important;
+            pointer-events: none !important;
+            z-index: 2147483647 !important;
+            border: 2px solid #3b82f6 !important;
+            background-color: rgba(59, 130, 246, 0.1) !important;
+            transition: all 0.05s ease-out !important;
+            display: none;
+        `;
+        
+        hoverLabel = document.createElement('div');
+        hoverLabel.style.cssText = `
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            background-color: #3b82f6 !important;
+            color: #ffffff !important;
+            font-size: 10px !important;
+            font-weight: bold !important;
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace !important;
+            padding: 2px 6px !important;
+            line-height: 1.2 !important;
+            white-space: nowrap !important;
+            border-radius: 0 0 4px 0 !important;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2) !important;
+            z-index: 2147483647 !important;
+        `;
+        
+        hoverBox.appendChild(hoverLabel);
+        document.body.appendChild(hoverBox);
+    };
+
+    const updateHoverBox = (target) => {
+        if (!hoverBox || !target || target === document.body || target === document.documentElement) {
+            if (hoverBox) hoverBox.style.display = 'none';
+            return;
+        }
+
+        const rect = target.getBoundingClientRect();
+        
+        // 💡 排除寬高為 0 的隱形元素
+        if (rect.width === 0 || rect.height === 0) {
+            hoverBox.style.display = 'none';
+            return;
+        }
+
+        hoverBox.style.display = 'block';
+        hoverBox.style.top = rect.top + 'px';
+        hoverBox.style.left = rect.left + 'px';
+        hoverBox.style.width = rect.width + 'px';
+        hoverBox.style.height = rect.height + 'px';
+
+        const tag = target.tagName.toLowerCase();
+        let classList = target.className;
+        if (typeof classList !== 'string') classList = '';
+        const firstClass = classList.split(' ').filter(c => c && !c.includes(':'))[0] || '';
+        
+        hoverLabel.textContent = tag + (firstClass ? '.' + firstClass : '');
+    };
+
+    document.addEventListener('mousemove', (e) => {
+        // 只有按下 Alt/Option 鍵時才顯示 Hover 框
+        if (e.altKey || e.metaKey) {
+            createHoverBox();
+            updateHoverBox(e.target);
+        } else if (hoverBox) {
+            hoverBox.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if ((e.key === 'Alt' || e.key === 'Meta') && hoverBox) {
+            // 這個事件無法精確知道滑鼠在哪，所以我們不強制顯示
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if ((e.key === 'Alt' || e.key === 'Meta') && hoverBox) {
+            hoverBox.style.display = 'none';
+        }
+    });
+    // --- 結束：DOM Element Highlighting ---
+
     document.addEventListener('click', (e) => {
       if (e.altKey || e.metaKey) {
         e.preventDefault(); e.stopPropagation();
         const target = e.target;
         window.parent.postMessage({ type: 'CGA_ELEMENT_SELECTED', path: resolveExactPath(target), element: getElementInfo(target) }, '*');
-        target.style.outline = '3px solid #3b82f6';
-        target.style.outlineOffset = '2px';
-        setTimeout(() => { target.style.outline = ''; target.style.outlineOffset = ''; }, 1000);
+        
+        // 點擊後隱藏 hover 框並播放目標動畫
+        if (hoverBox) hoverBox.style.display = 'none';
+        
+        target.style.transition = 'all 0.2s ease-in-out';
+        target.style.transform = 'scale(0.95)';
+        target.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.5)';
+        
+        setTimeout(() => { 
+            target.style.transform = ''; 
+            target.style.boxShadow = ''; 
+            target.style.transition = '';
+        }, 200);
       }
     }, true);
   });
