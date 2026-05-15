@@ -210,13 +210,89 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('load', () => {
-    console.log("[CGA Inspector] Active (with URL Sync Support)...");
+    console.log("[CGA Inspector] Active (with URL Sync & Gap Detection Support)...");
     
-    // 初始網址通報
+    // 💡 初始網址通報
     window.parent.postMessage({ 
         type: 'CGA_ROUTE_CHANGED', 
         path: window.location.pathname + window.location.search 
     }, '*');
+
+    // --- 🕵️‍♂️ 狀態化偵測機制 (Stateful Discovery) ---
+    let isScanningPaused = false;
+    const scannedGaps = new Set();
+
+    const getFiberProps = (target) => {
+        const fiberKey = Object.keys(target).find(key => key.startsWith('__reactFiber$'));
+        if (!fiberKey) return null;
+        return target[fiberKey]?.memoizedProps || target[fiberKey]?.pendingProps;
+    };
+
+    const isNoop = (fn) => {
+        if (!fn || typeof fn !== 'function') return true;
+        const str = fn.toString().replace(/\s/g, '');
+        return str.includes('()=>{}') || str.includes('()=>console.log(') || str.includes('function(){}');
+    };
+
+    const scanNextGap = () => {
+        if (isScanningPaused) return;
+
+        // 尋找潛在的交互元素：button, a, form
+        const candidates = document.querySelectorAll('button, a, form');
+        
+        for (const el of candidates) {
+            const fingerprint = `${window.location.pathname}_${el.tagName}_${el.innerText.trim().substring(0, 10)}`;
+            if (scannedGaps.has(fingerprint)) continue;
+
+            const props = getFiberProps(el);
+            let isUnbound = false;
+            let reason = "";
+
+            if (el.tagName === 'BUTTON') {
+                if (!props?.onClick || isNoop(props.onClick)) {
+                    isUnbound = true;
+                    reason = "按鈕尚未綁定點擊邏輯";
+                }
+            } else if (el.tagName === 'FORM') {
+                if (!props?.onSubmit || isNoop(props.onSubmit)) {
+                    isUnbound = true;
+                    reason = "表單尚未綁定提交邏輯";
+                }
+            }
+
+            if (isUnbound) {
+                isScanningPaused = true;
+                scannedGaps.add(fingerprint);
+                
+                // 標記該元素以便前端高亮
+                el.style.boxShadow = '0 0 0 4px rgba(234, 179, 8, 0.3)';
+                
+                window.parent.postMessage({
+                    type: 'CGA_AURA_REPORT',
+                    payload: {
+                        fingerprint,
+                        reason,
+                        element: getElementInfo(el),
+                        path: resolveExactPath(el)
+                    }
+                }, '*');
+                console.log("[CGA Inspector] Gap found and paused:", reason);
+                return; // 找到一個就停止
+            }
+        }
+    };
+
+    window.addEventListener('message', (event) => {
+        if (event.data?.type === 'CGA_RESUME_SCAN') {
+            console.log("[CGA Inspector] Resuming scan...");
+            isScanningPaused = false;
+            // 延遲一下再掃描，避免 UI 閃爍
+            setTimeout(scanNextGap, 1000);
+        }
+    });
+
+    // 初始掃描與 DOM 變動監聽
+    setTimeout(scanNextGap, 3000); // 給 React 一點渲染時間
 
     document.addEventListener('click', (e) => {
       if (e.altKey || e.metaKey) {
