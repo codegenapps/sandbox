@@ -243,6 +243,7 @@ if (typeof window !== 'undefined') {
     let isScanningPaused = false;
     const scannedGaps = new Set();
     let currentHighlightedGapEl = null;
+    let currentGapCategory = null; // 💡 紀錄當前高亮的類別
     let auditorConfig = {
         enabled: true,
         apiBinding: true,
@@ -263,6 +264,7 @@ if (typeof window !== 'undefined') {
             currentHighlightedGapEl.style.backgroundColor = '';
             currentHighlightedGapEl.style.boxShadow = '';
             currentHighlightedGapEl = null;
+            currentGapCategory = null;
         }
     };
 
@@ -428,13 +430,33 @@ if (typeof window !== 'undefined') {
                 currentHighlightedGapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         } else if (event.data?.type === 'CGA_SET_AUDITOR_CONFIG') {
+            const oldConfig = auditorConfig;
             auditorConfig = event.data.payload;
             console.log("[CGA Inspector] Auditor config updated:", auditorConfig);
-            if (auditorConfig.enabled && !isScanningPaused) {
+            
+            // 💡 智慧邏輯：如果目前高亮的類別在新的設定中被關閉了，則立刻清除它並繼續找下一個
+            if (isScanningPaused && currentGapCategory) {
+                // 將 camelCase 的 config key 轉為大寫 category string 做比對
+                const categoryToKeyMap = {
+                    'API_BINDING': 'apiBinding',
+                    'DEAD_LINK': 'deadLink',
+                    'IMAGE_AUDIT': 'imageAudit',
+                    'INPUT_VALIDATION': 'inputValidation',
+                    'DARK_MODE': 'darkMode',
+                    'STATIC_LIST': 'staticList',
+                    'RESPONSIVE_OVERFLOW': 'responsive',
+                    'RUNTIME_ERROR': 'runtimeError'
+                };
+                const configKey = categoryToKeyMap[currentGapCategory];
+                if (!auditorConfig.enabled || !auditorConfig[configKey]) {
+                    console.log("[CGA Inspector] Current gap category disabled, resuming scan...");
+                    isScanningPaused = false;
+                    clearGapHighlight();
+                    window.parent.postMessage({ type: 'CGA_CLEAR_ACTIVE_GAP' }, '*');
+                    setTimeout(scanNextGap, 500);
+                }
+            } else if (auditorConfig.enabled && !isScanningPaused) {
                 scanNextGap();
-            } else if (!auditorConfig.enabled) {
-                clearGapHighlight();
-                // 隱藏目前警告的邏輯會由 React 端處理，這裡只需清除高亮
             }
         }
     });
