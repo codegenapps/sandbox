@@ -2,7 +2,7 @@ const {spawn, execSync} = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const logPath = '/home/user/app/next.log';
+const logPath = '/home/user/app/server.log';
 const logFile = fs.openSync(logPath, 'a');
 const outFile = fs.openSync(logPath, 'a');
 
