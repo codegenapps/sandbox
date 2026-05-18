@@ -1,4 +1,4 @@
-const { Project, ScriptTarget, JsxEmit } = require('ts-morph');
+const { Project, ScriptTarget } = require('ts-morph');
 const fs = require('fs');
 
 /**
@@ -21,10 +21,11 @@ if (!fs.existsSync(filePath)) {
 
 try {
     // 極致寬鬆模式：關閉所有依賴解析，專注於純粹的 AST 結構
+    // 💡 注意：JsxEmit.Preserve 的數值為 1，直接寫死避免 import 報錯
     const project = new Project({
         compilerOptions: {
             target: ScriptTarget.ESNext,
-            jsx: JsxEmit.Preserve,
+            jsx: 1, 
             noResolve: true,
             skipLibCheck: true
         },

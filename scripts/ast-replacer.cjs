@@ -40,11 +40,12 @@ if (!targetTag) {
 }
 
 // 2. 啟動 ts-morph (使用極致寬鬆模式，避免 JSX 或第三方元件導致編譯器崩潰)
-const { ScriptTarget, JsxEmit } = require('ts-morph');
+const { ScriptTarget } = require('ts-morph');
+// 💡 注意：JsxEmit.Preserve 的數值為 1，直接寫死避免 import 報錯
 const project = new Project({
     compilerOptions: {
         target: ScriptTarget.ESNext,
-        jsx: JsxEmit.Preserve,
+        jsx: 1,
         noResolve: true,
         skipLibCheck: true
     },
