@@ -39,8 +39,19 @@ if (!targetTag) {
     process.exit(1);
 }
 
-// 2. 啟動 ts-morph
-const project = new Project();
+// 2. 啟動 ts-morph (使用極致寬鬆模式，避免 JSX 或第三方元件導致編譯器崩潰)
+const { ScriptTarget, JsxEmit } = require('ts-morph');
+const project = new Project({
+    compilerOptions: {
+        target: ScriptTarget.ESNext,
+        jsx: JsxEmit.Preserve,
+        noResolve: true,
+        skipLibCheck: true
+    },
+    skipAddingFilesFromTsConfig: true,
+    skipFileDependencyResolution: true,
+    useInMemoryFileSystem: false
+});
 const sourceFile = project.addSourceFileAtPath(filePath);
 
 // 3. 尋找目標 JSX 節點
@@ -117,12 +128,12 @@ if (bestNode) {
     // 🔬 極限防禦：語法樹校驗
     const diagnostics = sourceFile.getPreEmitDiagnostics();
     
-    // 只攔截「語法錯誤 (Syntax Error)」或「未閉合標籤」，忽略一般的 Type Error
+    // 只攔截致命的語法結構破壞 (Category 1 = Error)
     const fatalErrors = diagnostics.filter(d => {
-        const category = d.getCategory(); // 1 是 Error
+        const cat = d.getCategory(); 
         const code = d.getCode();
-        // 這些 TS Error Code 代表基本的語法結構被破壞了 (例如少括號、少標籤)
-        return category === 1 && (code === 1005 || code >= 1100 && code <= 1184 || code === 1381);
+        // 1005: expected token, 1109: expected expression, 17008: JSX unclosed
+        return cat === 1 && (code === 1005 || code === 1109 || code === 17008);
     });
 
     if (fatalErrors.length > 0) {
