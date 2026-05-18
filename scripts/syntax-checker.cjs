@@ -1,10 +1,10 @@
-const { Project, ScriptTarget } = require('ts-morph');
+const ts = require('typescript');
 const fs = require('fs');
 
 /**
- * CGA 語法防火牆 (Syntax Guard)
+ * CGA 語法防火牆 (Syntax Guard) - 原生解析版
  * 用法: node syntax-checker.cjs <filePath>
- * 說明: 專注於攔截 JSX 標籤未閉合、缺少括號等致命錯誤，忽略 TypeScript 型別警告。
+ * 說明: 使用更輕量的 typescript.createSourceFile 解析器，徹底避免 ts-morph 的環境崩潰問題。
  */
 
 const filePath = process.argv[2];
@@ -20,41 +20,30 @@ if (!fs.existsSync(filePath)) {
 }
 
 try {
-    // 極致寬鬆模式：關閉所有依賴解析，專注於純粹的 AST 結構
-    // 💡 注意：JsxEmit.Preserve 的數值為 1，直接寫死避免 import 報錯
-    const project = new Project({
-        compilerOptions: {
-            target: ScriptTarget.ESNext,
-            jsx: 1, 
-            noResolve: true,
-            skipLibCheck: true
-        },
-        skipAddingFilesFromTsConfig: true,
-        skipFileDependencyResolution: true,
-        useInMemoryFileSystem: false
-    });
-
-    const sourceFile = project.addSourceFileAtPath(filePath);
+    const content = fs.readFileSync(filePath, 'utf8');
     
-    // 🔬 改用 getParseDiagnostics 僅檢查語法解析錯誤，避開重型 TypeCheck 導致的崩潰 (reading 'flags')
-    const diags = sourceFile.getParseDiagnostics();
+    // 🔬 改用原生 TypeScript 解析器，這是一個純粹的字符串到 AST 的轉換，不涉及 TypeCheck，絕對不會崩潰
+    const sourceFile = ts.createSourceFile(
+        filePath, 
+        content, 
+        ts.ScriptTarget.Latest, 
+        true, 
+        ts.ScriptKind.TSX
+    );
     
-    // 只攔截致命的語法結構破壞 (Category 1 = Error)
-    const errors = diags.filter(d => {
-        const cat = d.getCategory();
-        const code = d.getCode();
-        // 1005: expected token, 1109: expected expression, 17008: JSX unclosed
-        return cat === 1 && (code === 1005 || code === 1109 || code === 17008);
-    });
+    const diagnostics = sourceFile.parseDiagnostics;
 
-    if (errors.length > 0) {
-        // 取第一個錯誤訊息即可
-        console.log('SYNTAX_ERROR: ' + errors[0].getMessageText());
-        process.exit(0); // 正常退出，讓 Go 解析 STDOUT
+    if (diagnostics && diagnostics.length > 0) {
+        // 只過濾出真正的 Error (忽視 Warning)
+        const fatalErrors = diagnostics.filter(d => d.category === ts.DiagnosticCategory.Error);
+        
+        if (fatalErrors.length > 0) {
+            console.log('SYNTAX_ERROR: ' + fatalErrors[0].messageText);
+            process.exit(0);
+        }
     }
 
     console.log('OK');
 } catch (e) {
-    // 捕捉 ts-morph 本身的崩潰
-    console.log('SYNTAX_ERROR: Parser Crash - ' + e.message);
+    console.log('SYNTAX_ERROR: Native Parser Crash - ' + e.message);
 }
