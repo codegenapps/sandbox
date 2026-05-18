@@ -555,7 +555,7 @@ if (typeof window !== 'undefined') {
       if (e.altKey || e.metaKey) {
         e.preventDefault(); e.stopPropagation();
         const target = e.target;
-        window.parent.postMessage({ type: 'CGA_ELEMENT_SELECTED', path: resolveExactPath(target), element: getElementInfo(target) }, '*');
+        window.parent.postMessage({ type: 'CGA_ELEMENT_SELECTED', path: resolveExactPath(target), element: getElementInfo(target), outerHTML: target.outerHTML }, '*');
         
         // 點擊後隱藏 hover 框並播放目標動畫
         if (hoverBox) hoverBox.style.display = 'none';
