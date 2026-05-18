@@ -35,7 +35,9 @@ try {
     });
 
     const sourceFile = project.addSourceFileAtPath(filePath);
-    const diags = sourceFile.getPreEmitDiagnostics();
+    
+    // 🔬 改用 getParseDiagnostics 僅檢查語法解析錯誤，避開重型 TypeCheck 導致的崩潰 (reading 'flags')
+    const diags = sourceFile.getParseDiagnostics();
     
     // 只攔截致命的語法結構破壞 (Category 1 = Error)
     const errors = diags.filter(d => {

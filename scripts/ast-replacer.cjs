@@ -126,8 +126,8 @@ if (bestNode) {
     // 先在內存中進行替換
     nodeToReplace.replaceWithText(newCode);
 
-    // 🔬 極限防禦：語法樹校驗
-    const diagnostics = sourceFile.getPreEmitDiagnostics();
+    // 🔬 極限防禦：語法樹校驗 (僅檢查語法解析，不啟動崩潰率高的 TypeCheck)
+    const diagnostics = sourceFile.getParseDiagnostics();
     
     // 只攔截致命的語法結構破壞 (Category 1 = Error)
     const fatalErrors = diagnostics.filter(d => {
