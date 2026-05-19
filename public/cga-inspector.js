@@ -400,6 +400,11 @@ if (typeof window !== 'undefined') {
       isScanningPaused = false;
       clearGapHighlight(); 
       setTimeout(scanNextGap, 1000);
+    } else if (event.data?.type === 'CGA_NAVIGATE') {
+      // 💡 接收到導航指令時，使用 History API 進行無縫換頁 (SPA)
+      if (event.data.path && event.data.path !== window.location.pathname) {
+          window.history.pushState(null, '', event.data.path);
+      }
     } else if (event.data?.type === 'CGA_SCROLL_TO_GAP') {
       if (currentHighlightedGapEl) {
           currentHighlightedGapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
