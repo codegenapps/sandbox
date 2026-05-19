@@ -537,6 +537,9 @@ if (typeof window !== 'undefined') {
     document.addEventListener('mousemove', (e) => {
         // 按下 Alt/Option 鍵，或是「選取模式」開啟時，顯示 Hover 框
         if (e.altKey || e.metaKey || window.__cgaSelectMode) {
+            if (hoverBox && hoverBox.style.display === 'none') {
+                 hoverBox.style.display = 'block';
+            }
             createHoverBox();
             updateHoverBox(e.target);
         } else if (hoverBox) {
