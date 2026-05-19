@@ -78,6 +78,7 @@ if (typeof window !== 'undefined') {
 
   window.__cgaDraggingApi = null;
   window.__cgaLastHighlighted = null;
+  window.__cgaSelectMode = false; // ✨ 新增：選取模式旗標
 
   const clearHighlight = () => {
     if (window.__cgaLastHighlighted) {
@@ -201,6 +202,11 @@ if (typeof window !== 'undefined') {
       console.log("[CGA Inspector] Internal capture requested...");
       const base64 = await captureThumbnail();
       window.parent.postMessage({ type: 'CGA_SCREENSHOT_TAKEN', base64 }, '*');
+    } else if (event.data?.type === 'CGA_SET_SELECT_MODE') {
+      window.__cgaSelectMode = !!event.data.enabled;
+      if (!window.__cgaSelectMode && hoverBox) {
+        hoverBox.style.display = 'none';
+      }
     } else if (event.data?.type === 'CGA_SET_DRAG_API') {
       window.__cgaDraggingApi = event.data.api;
     } else if (event.data?.type === 'CGA_CLEAR_DRAG_API') {
@@ -529,8 +535,8 @@ if (typeof window !== 'undefined') {
     };
 
     document.addEventListener('mousemove', (e) => {
-        // 只有按下 Alt/Option 鍵時才顯示 Hover 框
-        if (e.altKey || e.metaKey) {
+        // 按下 Alt/Option 鍵，或是「選取模式」開啟時，顯示 Hover 框
+        if (e.altKey || e.metaKey || window.__cgaSelectMode) {
             createHoverBox();
             updateHoverBox(e.target);
         } else if (hoverBox) {
@@ -545,14 +551,14 @@ if (typeof window !== 'undefined') {
     });
 
     document.addEventListener('keyup', (e) => {
-        if ((e.key === 'Alt' || e.key === 'Meta') && hoverBox) {
+        if ((e.key === 'Alt' || e.key === 'Meta') && !window.__cgaSelectMode && hoverBox) {
             hoverBox.style.display = 'none';
         }
     });
     // --- 結束：DOM Element Highlighting ---
 
     document.addEventListener('click', (e) => {
-      if (e.altKey || e.metaKey) {
+      if (e.altKey || e.metaKey || window.__cgaSelectMode) {
         e.preventDefault(); e.stopPropagation();
         const target = e.target;
         window.parent.postMessage({ type: 'CGA_ELEMENT_SELECTED', path: resolveExactPath(target), element: getElementInfo(target), outerHTML: target.outerHTML }, '*');
@@ -569,6 +575,9 @@ if (typeof window !== 'undefined') {
             target.style.boxShadow = ''; 
             target.style.transition = '';
         }, 200);
+
+        // 如果是選取模式，選完後自動關閉（優化體驗：選一個改一個）
+        // 或者保持開啟？這裡我們先保持現狀，讓用戶手動關閉。
       }
     }, true);
   });
