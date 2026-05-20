@@ -13,8 +13,8 @@ if (typeof window !== 'undefined') {
     const scannedGaps = new Set();
     let currentHighlightedGapEl = null;
     let auditorConfig = {
-        enabled: true,
-        apiBinding: true,
+        enabled: false,
+        apiBinding: false,
         staticList: false,
         deadLink: false,
         seoMeta: false,
@@ -258,7 +258,7 @@ if (typeof window !== 'undefined') {
                     el.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)';
                     currentHighlightedGapEl = el;
 
-                    el.scrollIntoView({behavior: 'smooth', block: 'center'});
+                    // el.scrollIntoView({behavior: 'smooth', block: 'center'});
 
                     window.parent.postMessage({
                         type: 'CGA_AURA_REPORT',
