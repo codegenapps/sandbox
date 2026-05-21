@@ -102,32 +102,25 @@ if (typeof window !== 'undefined') {
         const str = fn.toString();
         const compactStr = str.replace(/\s/g, '');
 
-        // 1. 純空函數
-        if (compactStr.length <= 15 ||
-            compactStr.includes('()=>{}') ||
-            compactStr.includes('function(){}') ||
+        // 1. 純空函數判定
+        if (compactStr.length <= 15 || 
+            compactStr.includes('()=>{}') || 
+            compactStr.includes('function(){}') || 
             compactStr.includes('function(e){}')) {
             return true;
         }
 
-        // 2. 只有 console.log 或 alert
-        if (/^(async)?\s*(function)?\s*\(.*?\)\s*=>?\s*\{\s*(console\.log|alert)\(.*\);?\s*\}$/.test(str)) {
-            return true;
-        }
+        // 2. 核心：真假 API 判定 (Aggressive Mode)
+        // 只要函數中沒有出現真實網路請求 (fetch, axios, api.) 或異步特徵 (await, mutation, dispatch)
+        // 即便寫了一堆 setTimeout 或 console.log，也判定為「未串接真實業務邏輯」。
+        // 💡 警告：絕對不要加入 'submit' 或 'set'，會誤殺 setIsSubmitting 這種 UI 狀態。
+        const hasRealAction = /fetch\(|axios\.|api\.|await |dispatch\(|useMutation/i.test(compactStr);
 
-        // 3. 只有 e.preventDefault() 或是 e.stopPropagation() 的假動作
-        if (/^(async)?\s*(function)?\s*\(\w\)\s*=>?\s*\{\s*\w\.(preventDefault|stopPropagation)\(\);?\s*\}$/.test(str)) {
-            return true;
+        if (!hasRealAction) {
+            return true; // 判定為無靈魂的 Mock 代碼
         }
-
-        // 4. 缺乏真實業務邏輯的短函數 (少於 60 字元且沒有特定關鍵字)
-        if (compactStr.length < 60 && !/fetch|axios|await|dispatch|mutation|set|submit/i.test(compactStr)) {
-            return true;
-        }
-
         return false;
     };
-
     // --- 3. 截圖功能 ---
     const captureThumbnail = async () => {
         if (typeof window.htmlToImage === 'undefined') {
