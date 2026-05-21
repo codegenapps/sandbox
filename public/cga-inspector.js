@@ -90,15 +90,42 @@ if (typeof window !== 'undefined') {
     };
 
     const getFiberProps = (target) => {
-        const fiberKey = Object.keys(target).find(key => key.startsWith('__reactFiber$'));
-        if (!fiberKey) return null;
-        return target[fiberKey]?.memoizedProps || target[fiberKey]?.pendingProps;
+        const key = Object.keys(target).find(k => k.startsWith('__reactProps$') || k.startsWith('__reactFiber$'));
+        if (!key) return null;
+        if (key.startsWith('__reactProps$')) return target[key];
+        const fiber = target[key];
+        return fiber?.memoizedProps || fiber?.pendingProps;
     };
 
     const isNoop = (fn) => {
         if (!fn || typeof fn !== 'function') return true;
-        const str = fn.toString().replace(/\s/g, '');
-        return str.includes('()=>{}') || str.includes('()=>console.log(') || str.includes('function(){}');
+        const str = fn.toString();
+        const compactStr = str.replace(/\s/g, '');
+
+        // 1. 純空函數
+        if (compactStr.length <= 15 ||
+            compactStr.includes('()=>{}') ||
+            compactStr.includes('function(){}') ||
+            compactStr.includes('function(e){}')) {
+            return true;
+        }
+
+        // 2. 只有 console.log 或 alert
+        if (/^(async)?\s*(function)?\s*\(.*?\)\s*=>?\s*\{\s*(console\.log|alert)\(.*\);?\s*\}$/.test(str)) {
+            return true;
+        }
+
+        // 3. 只有 e.preventDefault() 或是 e.stopPropagation() 的假動作
+        if (/^(async)?\s*(function)?\s*\(\w\)\s*=>?\s*\{\s*\w\.(preventDefault|stopPropagation)\(\);?\s*\}$/.test(str)) {
+            return true;
+        }
+
+        // 4. 缺乏真實業務邏輯的短函數 (少於 60 字元且沒有特定關鍵字)
+        if (compactStr.length < 60 && !/fetch|axios|await|dispatch|mutation|set|submit/i.test(compactStr)) {
+            return true;
+        }
+
+        return false;
     };
 
     // --- 3. 截圖功能 ---
@@ -169,109 +196,134 @@ if (typeof window !== 'undefined') {
         if (auditorConfig.staticList) selectors.push('ul', '.grid', '.flex');
 
         if (selectors.length > 0) {
-            const candidates = document.querySelectorAll(selectors.join(', '));
+            const query = selectors.join(', ');
+            console.log("[Inspector] Scanning for:", query);
+            const candidates = document.querySelectorAll(query);
+            console.log("[Inspector] Found candidates:", candidates.length);
 
-            for (const el of candidates) {
-                const fingerprint = `${window.location.pathname}_${el.tagName}_${(el.innerText || el.src || el.href || '').trim().substring(0, 15)}_${el.className.substring(0, 10)}`;
-                if (scannedGaps.has(fingerprint)) continue;
+            let processedCount = 0;
+            try {
+                for (const el of candidates) {
+                    processedCount++;
+                    const fingerprint = window.location.pathname + '_' + el.tagName + '_' + (el.innerText || el.src || el.href || '').trim().substring(0, 15) + '_' + (typeof el.className === 'string' ? el.className : '').substring(0, 10);
 
-                const props = getFiberProps(el);
-                let isUnbound = false;
-                let reason = "";
-                let category = "";
+                    if (scannedGaps.has(fingerprint)) {
+                        continue;
+                    }
 
-                if (auditorConfig.apiBinding) {
-                    if (el.tagName === 'BUTTON') {
-                        if (!props?.onClick || isNoop(props.onClick)) {
-                            if (!(props?.type === 'submit' && el.closest('form'))) {
+                    const props = getFiberProps(el);
+
+                    // 🔬 [Debug] 只對第一個按鈕打印詳細資料，幫助定位為何沒被抓到
+                    if (processedCount === 1) {
+                        console.log("[Inspector Debug] First Candidate Details:", {
+                            tagName: el.tagName,
+                            hasProps: !!props,
+                            propsKeys: props ? Object.keys(props).join(',') : 'none',
+                            onClickType: typeof props?.onClick,
+                            onClickStr: props?.onClick?.toString().substring(0, 40)
+                        });
+                    }
+
+                    let isUnbound = false;
+                    let reason = "";
+                    let category = "";
+
+                    if (auditorConfig.apiBinding) {
+                        if (el.tagName === 'BUTTON') {
+                            const hasHandler = props && (props.onClick || props.onPress);
+                            if (!hasHandler || isNoop(props.onClick || props.onPress)) {
+                                if (!(props?.type === 'submit' && el.closest('form'))) {
+                                    isUnbound = true;
+                                    category = "API_BINDING";
+                                    reason = "按鈕缺乏點擊功能";
+                                }
+                            }
+                        } else if (el.tagName === 'FORM') {
+                            if (!props || (!props.onSubmit && !props.action) || isNoop(props.onSubmit)) {
                                 isUnbound = true;
                                 category = "API_BINDING";
-                                reason = "按鈕缺乏點擊功能";
+                                reason = "表單缺乏送出邏輯";
                             }
                         }
-                    } else if (el.tagName === 'FORM') {
-                        if (!props?.onSubmit || isNoop(props.onSubmit)) {
+                    }
+
+                    if (!isUnbound && auditorConfig.deadLink && el.tagName === 'A') {
+                        const href = el.getAttribute('href');
+                        if (!href || href === '#' || href.includes('javascript:void')) {
                             isUnbound = true;
-                            category = "API_BINDING";
-                            reason = "表單缺乏送出邏輯";
+                            category = "DEAD_LINK";
+                            reason = "超連結缺乏有效的 href 路徑";
                         }
                     }
-                }
 
-                if (!isUnbound && auditorConfig.deadLink && el.tagName === 'A') {
-                    const href = el.getAttribute('href');
-                    if (!href || href === '#' || href.includes('javascript:void')) {
-                        isUnbound = true;
-                        category = "DEAD_LINK";
-                        reason = "超連結缺乏有效的 href 路徑";
-                    }
-                }
-
-                if (!isUnbound && auditorConfig.imageAudit && el.tagName === 'IMG') {
-                    const alt = el.getAttribute('alt');
-                    if (alt === null || alt.trim() === '') {
-                        isUnbound = true;
-                        category = "IMAGE_AUDIT";
-                        reason = "圖片缺乏 alt 無障礙標籤";
-                    }
-                }
-
-                if (!isUnbound && auditorConfig.inputValidation && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-                    const hasRequired = el.hasAttribute('required');
-                    const hasPattern = el.hasAttribute('pattern');
-                    if (!hasRequired && !hasPattern && el.closest('form')) {
-                        isUnbound = true;
-                        category = "INPUT_VALIDATION";
-                        reason = "輸入框缺乏 required 屬性或基礎驗證規範";
-                    }
-                }
-
-                if (!isUnbound && auditorConfig.darkMode) {
-                    const cls = typeof el.className === 'string' ? el.className : '';
-                    if (cls.includes('text-[#') || cls.includes('bg-[#') || (cls.includes('text-black') && !cls.includes('dark:text-'))) {
-                        isUnbound = true;
-                        category = "DARK_MODE";
-                        reason = "使用強制色碼，深色模式切換時可能難以閱讀";
-                    }
-                }
-
-                if (!isUnbound && auditorConfig.staticList && (el.tagName === 'UL' || (typeof el.className === 'string' && (el.className.includes('grid') || el.className.includes('flex'))))) {
-                    const children = el.children;
-                    if (children.length >= 3) {
-                        const c1 = children[0], c2 = children[1], c3 = children[2];
-                        if (c1.tagName === c2.tagName && c2.tagName === c3.tagName && c1.className === c2.className && c1.className !== '') {
+                    if (!isUnbound && auditorConfig.imageAudit && el.tagName === 'IMG') {
+                        const alt = el.getAttribute('alt');
+                        if (alt === null || alt.trim() === '') {
                             isUnbound = true;
-                            category = "STATIC_LIST";
-                            reason = "發現多個結構高度重複的子元件，疑似未採用動態渲染";
+                            category = "IMAGE_AUDIT";
+                            reason = "圖片缺乏 alt 無障礙標籤";
                         }
                     }
-                }
 
-                if (isUnbound) {
-                    isScanningPaused = true;
-                    scannedGaps.add(fingerprint);
-
-                    clearGapHighlight();
-                    el.style.outline = '2px dashed #3b82f6';
-                    el.style.outlineOffset = '4px';
-                    el.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                    el.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)';
-                    currentHighlightedGapEl = el;
-
-                    // el.scrollIntoView({behavior: 'smooth', block: 'center'});
-
-                    window.parent.postMessage({
-                        type: 'CGA_AURA_REPORT',
-                        payload: {
-                            fingerprint,
-                            category,
-                            reason,
-                            element: getElementInfo(el),
-                            path: resolveExactPath(el)
+                    if (!isUnbound && auditorConfig.inputValidation && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+                        const hasRequired = el.hasAttribute('required');
+                        const hasPattern = el.hasAttribute('pattern');
+                        if (!hasRequired && !hasPattern && el.closest('form')) {
+                            isUnbound = true;
+                            category = "INPUT_VALIDATION";
+                            reason = "輸入框缺乏 required 屬性或基礎驗證規範";
                         }
-                    }, '*');
-                    return;
+                    }
+
+                    if (!isUnbound && auditorConfig.darkMode) {
+                        const cls = typeof el.className === 'string' ? el.className : '';
+                        if (cls.includes('text-[#') || cls.includes('bg-[#') || (cls.includes('text-black') && !cls.includes('dark:text-'))) {
+                            isUnbound = true;
+                            category = "DARK_MODE";
+                            reason = "使用強制色碼，深色模式切換時可能難以閱讀";
+                        }
+                    }
+
+                    if (!isUnbound && auditorConfig.staticList && (el.tagName === 'UL' || (typeof el.className === 'string' && (el.className.includes('grid') || el.className.includes('flex'))))) {
+                        const children = el.children;
+                        if (children.length >= 3) {
+                            const c1 = children[0], c2 = children[1], c3 = children[2];
+                            if (c1.tagName === c2.tagName && c2.tagName === c3.tagName && c1.className === c2.className && c1.className !== '') {
+                                isUnbound = true;
+                                category = "STATIC_LIST";
+                                reason = "發現多個結構高度重複的子元件，疑似未採用動態渲染";
+                            }
+                        }
+                    }
+
+                    if (isUnbound) {
+                        console.log("[Inspector] Found issue:", category, reason, "at fingerprint:", fingerprint);
+                        isScanningPaused = true;
+                        scannedGaps.add(fingerprint);
+
+                        clearGapHighlight();
+                        el.style.outline = '2px dashed #3b82f6';
+                        el.style.outlineOffset = '4px';
+                        el.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                        el.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)';
+                        currentHighlightedGapEl = el;
+
+                        window.parent.postMessage({
+                            type: 'CGA_AURA_REPORT',
+                            payload: {
+                                fingerprint,
+                                category,
+                                reason,
+                                element: getElementInfo(el),
+                                path: resolveExactPath(el)
+                            }
+                        }, '*');
+                        return; // Found one, pause scanning
+                    }
                 }
+                console.log("[Inspector] Loop completed. All", processedCount, "candidates processed. No issues found.");
+            } catch (loopError) {
+                console.error("[Inspector] Loop crashed at element", processedCount, loopError);
             }
         }
 
@@ -436,7 +488,10 @@ if (typeof window !== 'undefined') {
             const oldConfigStr = JSON.stringify(auditorConfig);
             const newConfigStr = JSON.stringify(event.data.payload);
 
+            console.log(`[Inspector RX] Received CGA_SET_AUDITOR_CONFIG. Old: ${oldConfigStr}, New: ${newConfigStr}`);
+
             if (oldConfigStr !== newConfigStr) {
+                console.log("[Inspector] Config changed, resetting scan state and triggering scanNextGap...");
                 auditorConfig = event.data.payload;
 
                 isScanningPaused = false;
@@ -448,6 +503,8 @@ if (typeof window !== 'undefined') {
                 if (auditorConfig.enabled) {
                     setTimeout(scanNextGap, 500);
                 }
+            } else {
+                console.log("[Inspector] Config unchanged, ignoring.");
             }
         }
     });
