@@ -249,19 +249,26 @@ if (typeof window !== 'undefined') {
 
                     if (!isUnbound && auditorConfig.deadLink && el.tagName === 'A') {
                         const href = el.getAttribute('href');
-                        if (!href || href === '#' || href.includes('javascript:void')) {
+                        // 💡 進化：允許錨點跳轉 (#section)，只抓單純的 # 或空值
+                        if (!href || href === '#' || href.trim() === '' || href.includes('javascript:void')) {
                             isUnbound = true;
                             category = "DEAD_LINK";
-                            reason = "超連結缺乏有效的 href 路徑";
+                            reason = "超連結缺乏有效的導航路徑（僅為 # 或空值）";
                         }
                     }
 
                     if (!isUnbound && auditorConfig.imageAudit && el.tagName === 'IMG') {
                         const alt = el.getAttribute('alt');
-                        if (alt === null || alt.trim() === '') {
+                        const isBroken = el.complete && (typeof el.naturalWidth !== 'undefined' && el.naturalWidth === 0);
+                        
+                        if (isBroken) {
                             isUnbound = true;
                             category = "IMAGE_AUDIT";
-                            reason = "圖片缺乏 alt 無障礙標籤";
+                            reason = "偵測到失效的圖片連結 (破圖)";
+                        } else if (alt === null || alt.trim() === '') {
+                            isUnbound = true;
+                            category = "IMAGE_AUDIT";
+                            reason = "圖片缺乏 alt 無障礙標籤，不利於 SEO";
                         }
                     }
 
@@ -271,7 +278,7 @@ if (typeof window !== 'undefined') {
                         if (!hasRequired && !hasPattern && el.closest('form')) {
                             isUnbound = true;
                             category = "INPUT_VALIDATION";
-                            reason = "輸入框缺乏 required 屬性或基礎驗證規範";
+                            reason = "表單輸入框缺乏驗證規則 (如必填或格式限制)，建議補強以確保 API 資料正確";
                         }
                     }
 
@@ -280,7 +287,7 @@ if (typeof window !== 'undefined') {
                         if (cls.includes('text-[#') || cls.includes('bg-[#') || (cls.includes('text-black') && !cls.includes('dark:text-'))) {
                             isUnbound = true;
                             category = "DARK_MODE";
-                            reason = "使用強制色碼，深色模式切換時可能難以閱讀";
+                            reason = "發現硬編碼顏色，這可能會導致深色模式下文字隱形";
                         }
                     }
 
@@ -291,7 +298,7 @@ if (typeof window !== 'undefined') {
                             if (c1.tagName === c2.tagName && c2.tagName === c3.tagName && c1.className === c2.className && c1.className !== '') {
                                 isUnbound = true;
                                 category = "STATIC_LIST";
-                                reason = "發現多個結構高度重複的子元件，疑似未採用動態渲染";
+                                reason = "偵測到高度重複的內容塊，建議改為動態資料渲染 (map)";
                             }
                         }
                     }
@@ -327,11 +334,51 @@ if (typeof window !== 'undefined') {
             }
         }
 
+        // --- 🟢 SEO 標籤偵測 (og 系列) ---
+        if (auditorConfig.seoMeta) {
+            const getMeta = (name, property) => {
+                if (name) return document.querySelector('meta[name="' + name + '"]')?.getAttribute('content');
+                if (property) return document.querySelector('meta[property="' + property + '"]')?.getAttribute('content');
+                return null;
+            };
+
+            const title = document.title;
+            const desc = getMeta('description');
+            const ogImg = getMeta(null, 'og:image');
+            const ogTitle = getMeta(null, 'og:title');
+
+            let missing = [];
+            if (!title || title.length < 5) missing.push("網頁標題 (Title)");
+            if (!desc) missing.push("網頁描述 (Description)");
+            if (!ogImg) missing.push("社群分享圖片 (og:image)");
+            if (!ogTitle) missing.push("社群分享標題 (og:title)");
+
+            if (missing.length > 0) {
+                const fingerprint = 'SEO_' + window.location.pathname;
+                if (!scannedGaps.has(fingerprint)) {
+                    isScanningPaused = true;
+                    scannedGaps.add(fingerprint);
+                    window.parent.postMessage({
+                        type: 'CGA_AURA_REPORT',
+                        payload: {
+                            fingerprint,
+                            category: "SEO_META",
+                            reason: "缺乏關鍵 SEO/社交分享標籤：" + missing.join(', '),
+                            element: "document.head",
+                            path: window.location.pathname
+                        }
+                    }, '*');
+                    return;
+                }
+            }
+        }
+
+        // --- 🟢 響應式溢出偵測 ---
         if (auditorConfig.responsive) {
             const docWidth = document.documentElement.scrollWidth;
             const winWidth = window.innerWidth;
             if (docWidth > winWidth + 10) {
-                const fingerprint = `OVERFLOW_${window.location.pathname}`;
+                const fingerprint = 'OVERFLOW_' + window.location.pathname + '_' + winWidth;
                 if (!scannedGaps.has(fingerprint)) {
                     isScanningPaused = true;
                     scannedGaps.add(fingerprint);
@@ -340,7 +387,7 @@ if (typeof window !== 'undefined') {
                         payload: {
                             fingerprint,
                             category: "RESPONSIVE_OVERFLOW",
-                            reason: `頁面寬度 (${docWidth}px) 超出螢幕寬度 (${winWidth}px)，出現水平滾動條`,
+                            reason: '頁面寬度 (' + docWidth + 'px) 在目前的視窗寬度 (' + winWidth + 'px) 下發生溢出，出現水平捲軸',
                             element: "document.documentElement",
                             path: window.location.pathname
                         }
