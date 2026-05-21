@@ -190,9 +190,9 @@ if (typeof window !== 'undefined') {
 
         if (selectors.length > 0) {
             const query = selectors.join(', ');
-            console.log("[Inspector] Scanning for:", query);
+           // console.log("[Inspector] Scanning for:", query);
             const candidates = document.querySelectorAll(query);
-            console.log("[Inspector] Found candidates:", candidates.length);
+           // console.log("[Inspector] Found candidates:", candidates.length);
 
             let processedCount = 0;
             try {
@@ -207,15 +207,15 @@ if (typeof window !== 'undefined') {
                     const props = getFiberProps(el);
 
                     // 🔬 [Debug] 只對第一個按鈕打印詳細資料，幫助定位為何沒被抓到
-                    if (processedCount === 1) {
-                        console.log("[Inspector Debug] First Candidate Details:", {
-                            tagName: el.tagName,
-                            hasProps: !!props,
-                            propsKeys: props ? Object.keys(props).join(',') : 'none',
-                            onClickType: typeof props?.onClick,
-                            onClickStr: props?.onClick?.toString().substring(0, 40)
-                        });
-                    }
+                    // if (processedCount === 1) {
+                    //     console.log("[Inspector Debug] First Candidate Details:", {
+                    //         tagName: el.tagName,
+                    //         hasProps: !!props,
+                    //         propsKeys: props ? Object.keys(props).join(',') : 'none',
+                    //         onClickType: typeof props?.onClick,
+                    //         onClickStr: props?.onClick?.toString().substring(0, 40)
+                    //     });
+                    // }
 
                     let isUnbound = false;
                     let reason = "";
@@ -297,7 +297,7 @@ if (typeof window !== 'undefined') {
                     }
 
                     if (isUnbound) {
-                        console.log("[Inspector] Found issue:", category, reason, "at fingerprint:", fingerprint);
+                       // console.log("[Inspector] Found issue:", category, reason, "at fingerprint:", fingerprint);
                         isScanningPaused = true;
                         scannedGaps.add(fingerprint);
 
@@ -321,7 +321,7 @@ if (typeof window !== 'undefined') {
                         return; // Found one, pause scanning
                     }
                 }
-                console.log("[Inspector] Loop completed. All", processedCount, "candidates processed. No issues found.");
+               // console.log("[Inspector] Loop completed. All", processedCount, "candidates processed. No issues found.");
             } catch (loopError) {
                 console.error("[Inspector] Loop crashed at element", processedCount, loopError);
             }
@@ -528,10 +528,10 @@ if (typeof window !== 'undefined') {
             const oldConfigStr = JSON.stringify(auditorConfig);
             const newConfigStr = JSON.stringify(event.data.payload);
 
-            console.log(`[Inspector RX] Received CGA_SET_AUDITOR_CONFIG. Old: ${oldConfigStr}, New: ${newConfigStr}`);
+           // console.log(`[Inspector RX] Received CGA_SET_AUDITOR_CONFIG. Old: ${oldConfigStr}, New: ${newConfigStr}`);
 
             if (oldConfigStr !== newConfigStr) {
-                console.log("[Inspector] Config changed, resetting scan state and triggering scanNextGap...");
+               // console.log("[Inspector] Config changed, resetting scan state and triggering scanNextGap...");
                 auditorConfig = event.data.payload;
 
                 isScanningPaused = false;
