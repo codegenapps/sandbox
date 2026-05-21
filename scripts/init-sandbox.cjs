@@ -127,14 +127,19 @@ function generateApiSdk(apiDir, schemaContent) {
 }
 
 function writeEnv(apiUrl, apiKey, docUrl, token) {
-    let env = 'NEXT_PUBLIC_CGA_API_URL=' + apiUrl + '\n' +
-                'NEXT_PUBLIC_CGA_API_KEY=' + apiKey + '\n' +
-                'NEXT_PUBLIC_CGA_DOC_URL=' + docUrl + '\n' +
-                'CGA_ACCESS_TOKEN=' + token + '\n';
+    let env = `
+NEXT_PUBLIC_CGA_API_URL=${apiUrl}
+NEXT_PUBLIC_CGA_API_KEY=${apiKey}
+NEXT_PUBLIC_CGA_DOC_URL=${docUrl}
+VITE_CGA_API_URL=${apiUrl}
+VITE_CGA_API_KEY=${apiKey}
+VITE_CGA_DOC_URL=${docUrl}
+CGA_ACCESS_TOKEN=${token}
+`;
     if (process.env.GITHUB_ACCESS_TOKEN) {
-        env += 'GITHUB_ACCESS_TOKEN=' + process.env.GITHUB_ACCESS_TOKEN + '\n';
+        env += `GITHUB_ACCESS_TOKEN=${process.env.GITHUB_ACCESS_TOKEN}\n`;
     }
-    fs.writeFileSync('/home/user/app/.env.local', env);
+    fs.writeFileSync('/home/user/app/.env.local', env.trim() + '\n');
 }
 
 init().catch(console.error);

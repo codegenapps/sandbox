@@ -10,9 +10,9 @@ const getApiUrl = () => {
   // 2. Vite / ESM 環境
   try {
     // @ts-ignore
-    if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_URL) {
+    if (import.meta && import.meta.env) {
       // @ts-ignore
-      return import.meta.env.NEXT_PUBLIC_CGA_API_URL;
+      return import.meta.env.VITE_CGA_API_URL || import.meta.env.NEXT_PUBLIC_CGA_API_URL || '';
     }
   } catch (e) {}
   return '';
@@ -26,9 +26,9 @@ const getApiKey = () => {
   // 2. Vite / ESM 環境
   try {
     // @ts-ignore
-    if (import.meta && import.meta.env && import.meta.env.NEXT_PUBLIC_CGA_API_KEY) {
+    if (import.meta && import.meta.env) {
       // @ts-ignore
-      return import.meta.env.NEXT_PUBLIC_CGA_API_KEY;
+      return import.meta.env.VITE_CGA_API_KEY || import.meta.env.NEXT_PUBLIC_CGA_API_KEY || '';
     }
   } catch (e) {}
   return '';
