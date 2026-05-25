@@ -40,6 +40,42 @@ if (!targetTag) {
     process.exit(1);
 }
 
+// --- 💡 關鍵修正：針對 HTML 檔案使用正則匹配 (Fallback Mode) ---
+if (filePath.toLowerCase().endsWith('.html')) {
+    const originalContent = fs.readFileSync(filePath, 'utf8');
+    
+    // 建立一個寬鬆的 HTML 標籤匹配正則
+    // 邏輯：尋找標籤名相同，且包含目標 ID 或 Class 的區塊
+    let escapedId = targetId ? targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+    let matchFound = false;
+    let updatedContent = originalContent;
+
+    // 簡單替換策略：優先匹配 ID，次之匹配標籤特徵
+    if (escapedId) {
+        const idRegex = new RegExp(`<${targetTag}[^>]*id=["']${escapedId}["'][^>]*>([\\s\\S]*?)<\\/${targetTag}>|<${targetTag}[^>]*id=["']${escapedId}["'][^>]*\\/>`, 'gi');
+        if (idRegex.test(originalContent)) {
+            updatedContent = originalContent.replace(idRegex, newCode);
+            matchFound = true;
+        }
+    }
+
+    if (!matchFound) {
+        // 如果沒 ID，嘗試精準匹配整段 Signature (如果 Signature 夠長)
+        if (originalContent.includes(targetSignature)) {
+            updatedContent = originalContent.replace(targetSignature, newCode);
+            matchFound = true;
+        }
+    }
+
+    if (matchFound) {
+        fs.writeFileSync(filePath, updatedContent);
+        console.log("SUCCESS");
+    } else {
+        console.log("AST_MISMATCH"); // 對 HTML 來說這代表正則匹配失敗
+    }
+    process.exit(0);
+}
+
 // 2. 啟動 ts-morph (使用極致寬鬆模式進行節點定位)
 const project = new Project({
     compilerOptions: { target: ScriptTarget.ESNext, jsx: 1, noResolve: true, skipLibCheck: true },

@@ -22,6 +22,12 @@ if (!fs.existsSync(filePath)) {
 try {
     const content = fs.readFileSync(filePath, 'utf8');
     
+    // 💡 針對 HTML 檔案，跳過 TS 語法檢查 (因為 HTML 不是合法的 TSX)
+    if (filePath.toLowerCase().endsWith('.html')) {
+        console.log('OK');
+        process.exit(0);
+    }
+    
     // 🔬 改用原生 TypeScript 解析器，這是一個純粹的字符串到 AST 的轉換，不涉及 TypeCheck，絕對不會崩潰
     const sourceFile = ts.createSourceFile(
         filePath, 

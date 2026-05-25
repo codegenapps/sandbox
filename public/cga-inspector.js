@@ -64,7 +64,13 @@ if (typeof window !== 'undefined') {
                 }
             }
         }
-        return exactPath || window.location.pathname;
+        
+        let finalPath = exactPath || window.location.pathname;
+        // 💡 修正：針對靜態網頁，將根路徑映射回 index.html
+        if (finalPath === '/' || finalPath === '') {
+            finalPath = '/index.html';
+        }
+        return finalPath;
     };
 
     const getElementInfo = (target) => {
@@ -223,16 +229,17 @@ if (typeof window !== 'undefined') {
 
                     if (auditorConfig.apiBinding) {
                         if (el.tagName === 'BUTTON') {
-                            const hasHandler = props && (props.onClick || props.onPress);
-                            if (!hasHandler || isNoop(props.onClick || props.onPress)) {
-                                if (!(props?.type === 'submit' && el.closest('form'))) {
+                            const hasHandler = (props && (props.onClick || props.onPress)) || el.onclick;
+                            if (!hasHandler || isNoop(props?.onClick || props?.onPress || el.onclick)) {
+                                if (!(props?.type === 'submit' && el.closest('form')) && !(el.type === 'submit' && el.closest('form'))) {
                                     isUnbound = true;
                                     category = "API_BINDING";
                                     reason = "按鈕缺乏點擊功能";
                                 }
                             }
                         } else if (el.tagName === 'FORM') {
-                            if (!props || (!props.onSubmit && !props.action) || isNoop(props.onSubmit)) {
+                            const hasSubmit = (props && (props.onSubmit || props.action)) || el.onsubmit || el.action;
+                            if (!hasSubmit || isNoop(props?.onSubmit || el.onsubmit)) {
                                 isUnbound = true;
                                 category = "API_BINDING";
                                 reason = "表單缺乏送出邏輯";
