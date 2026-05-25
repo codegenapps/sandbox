@@ -64,7 +64,7 @@ if (typeof window !== 'undefined') {
                 }
             }
         }
-        
+
         let finalPath = exactPath || window.location.pathname;
         // 💡 修正：針對靜態網頁，將根路徑映射回 index.html
         if (finalPath === '/' || finalPath === '') {
@@ -109,9 +109,9 @@ if (typeof window !== 'undefined') {
         const compactStr = str.replace(/\s/g, '');
 
         // 1. 純空函數判定
-        if (compactStr.length <= 15 || 
-            compactStr.includes('()=>{}') || 
-            compactStr.includes('function(){}') || 
+        if (compactStr.length <= 15 ||
+            compactStr.includes('()=>{}') ||
+            compactStr.includes('function(){}') ||
             compactStr.includes('function(e){}')) {
             return true;
         }
@@ -196,9 +196,9 @@ if (typeof window !== 'undefined') {
 
         if (selectors.length > 0) {
             const query = selectors.join(', ');
-           // console.log("[Inspector] Scanning for:", query);
+            // console.log("[Inspector] Scanning for:", query);
             const candidates = document.querySelectorAll(query);
-           // console.log("[Inspector] Found candidates:", candidates.length);
+            // console.log("[Inspector] Found candidates:", candidates.length);
 
             let processedCount = 0;
             try {
@@ -260,7 +260,7 @@ if (typeof window !== 'undefined') {
                     if (!isUnbound && auditorConfig.imageAudit && el.tagName === 'IMG') {
                         const alt = el.getAttribute('alt');
                         const isBroken = el.complete && (typeof el.naturalWidth !== 'undefined' && el.naturalWidth === 0);
-                        
+
                         if (isBroken) {
                             isUnbound = true;
                             category = "IMAGE_AUDIT";
@@ -304,7 +304,7 @@ if (typeof window !== 'undefined') {
                     }
 
                     if (isUnbound) {
-                       // console.log("[Inspector] Found issue:", category, reason, "at fingerprint:", fingerprint);
+                        // console.log("[Inspector] Found issue:", category, reason, "at fingerprint:", fingerprint);
                         isScanningPaused = true;
                         scannedGaps.add(fingerprint);
 
@@ -328,7 +328,7 @@ if (typeof window !== 'undefined') {
                         return; // Found one, pause scanning
                     }
                 }
-               // console.log("[Inspector] Loop completed. All", processedCount, "candidates processed. No issues found.");
+                // console.log("[Inspector] Loop completed. All", processedCount, "candidates processed. No issues found.");
             } catch (loopError) {
                 console.error("[Inspector] Loop crashed at element", processedCount, loopError);
             }
@@ -523,9 +523,17 @@ if (typeof window !== 'undefined') {
             clearGapHighlight();
             setTimeout(scanNextGap, 1000);
         } else if (event.data?.type === 'CGA_NAVIGATE') {
-            // 💡 接收到導航指令時，使用 History API 進行無縫換頁 (SPA)
-            if (event.data.path && event.data.path !== window.location.pathname) {
-                window.history.pushState(null, '', event.data.path);
+            const targetPath = event.data.path;
+            if (targetPath && targetPath !== window.location.pathname) {
+                // 💡 智慧導航：如果是 .html 結尾，或是偵測到不是 SPA 環境
+                // 則執行強制跳轉 (Location)，否則僅更新 URL (SPA 模式)
+                const isSpa = !!(window.__NEXT_DATA__ || window.next || window.React);
+
+                if (targetPath.toLowerCase().endsWith('.html') || !isSpa) {
+                    window.location.href = targetPath;
+                } else {
+                    window.history.pushState(null, '', targetPath);
+                }
             }
         } else if (event.data?.type === 'CGA_SCROLL_TO_GAP') {
             if (currentHighlightedGapEl) {
@@ -535,10 +543,10 @@ if (typeof window !== 'undefined') {
             const oldConfigStr = JSON.stringify(auditorConfig);
             const newConfigStr = JSON.stringify(event.data.payload);
 
-           // console.log(`[Inspector RX] Received CGA_SET_AUDITOR_CONFIG. Old: ${oldConfigStr}, New: ${newConfigStr}`);
+            // console.log(`[Inspector RX] Received CGA_SET_AUDITOR_CONFIG. Old: ${oldConfigStr}, New: ${newConfigStr}`);
 
             if (oldConfigStr !== newConfigStr) {
-               // console.log("[Inspector] Config changed, resetting scan state and triggering scanNextGap...");
+                // console.log("[Inspector] Config changed, resetting scan state and triggering scanNextGap...");
                 auditorConfig = event.data.payload;
 
                 isScanningPaused = false;
