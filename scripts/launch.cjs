@@ -101,7 +101,12 @@ if (deps.next || scripts.dev?.includes('next dev')) {
 } else {
     log("Unknown project type. Falling back to 'npm run dev'.");
     bin = 'npm';
-    args = ['run', 'dev', '--', '--host', '0.0.0.0', '--port', '3000'];
+    const devScript = scripts.dev || "";
+    if (devScript.includes('serve')) {
+        args = ['run', 'dev'];
+    } else {
+        args = ['run', 'dev', '--', '--host', '0.0.0.0', '--port', '3000'];
+    }
 }
 
 // 3. 防呆：確保執行檔存在
