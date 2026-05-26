@@ -208,8 +208,8 @@ if (typeof window !== 'undefined') {
                     const el = candidates[i];
                     processedCount++;
 
-                    // 💡 修正：指紋加入 Category，防止跨類別的跳過干擾
-                    const fingerprint = window.location.pathname + '_' + category + '_' + i + '_' + (el.innerText || el.src || el.href || '').trim().substring(0, 15);
+                    // 💡 修正：指紋加入 index (i)，防止相同內容的元件互相碰撞
+                    const fingerprint = window.location.pathname + '_' + el.tagName + '_' + i + '_' + (el.innerText || el.src || el.href || '').trim().substring(0, 15);
 
                     if (scannedGaps.has(fingerprint)) {
                         continue;
@@ -322,7 +322,7 @@ if (typeof window !== 'undefined') {
             } catch (loopError) {
                 console.error("[Inspector] Loop crashed", loopError);
             }
-            
+
             // 💡 修正：如果掃完一整圈都沒發現，通知前端「掃描完成」
             if (!foundAny) {
                 window.parent.postMessage({ type: 'CGA_SCAN_COMPLETED' }, '*');
@@ -364,8 +364,8 @@ if (typeof window !== 'undefined') {
                 if (!scannedGaps.has(fingerprint)) {
                     isScanningPaused = true;
                     scannedGaps.add(fingerprint);
-                    
-                    const reason = missing.length > 0 
+
+                    const reason = missing.length > 0
                         ? "缺乏關鍵 SEO 標籤：" + missing.join(', ')
                         : "SEO 結構警告：" + warnings.join(', ');
 
