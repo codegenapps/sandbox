@@ -207,9 +207,9 @@ if (typeof window !== 'undefined') {
                 for (let i = 0; i < candidates.length; i++) {
                     const el = candidates[i];
                     processedCount++;
-                    
-                    // 💡 修正：指紋加入 index (i)，防止相同內容的元件互相碰撞
-                    const fingerprint = window.location.pathname + '_' + el.tagName + '_' + i + '_' + (el.innerText || el.src || el.href || '').trim().substring(0, 15);
+
+                    // 💡 修正：指紋加入 Category，防止跨類別的跳過干擾
+                    const fingerprint = window.location.pathname + '_' + category + '_' + i + '_' + (el.innerText || el.src || el.href || '').trim().substring(0, 15);
 
                     if (scannedGaps.has(fingerprint)) {
                         continue;
