@@ -334,7 +334,7 @@ if (typeof window !== 'undefined') {
             }
         }
 
-        // --- 🟢 SEO 標籤偵測 (og 系列) ---
+        // --- 🟢 SEO 標籤偵測 (進階版) ---
         if (auditorConfig.seoMeta) {
             const getMeta = (name, property) => {
                 if (name) return document.querySelector('meta[name="' + name + '"]')?.getAttribute('content');
@@ -346,24 +346,40 @@ if (typeof window !== 'undefined') {
             const desc = getMeta('description');
             const ogImg = getMeta(null, 'og:image');
             const ogTitle = getMeta(null, 'og:title');
+            const h1s = document.querySelectorAll('h1');
 
             let missing = [];
-            if (!title || title.length < 5) missing.push("網頁標題 (Title)");
+            let warnings = [];
+
+            if (!title) missing.push("網頁標題 (Title)");
+            else if (title.length < 10) warnings.push("標題太短 (建議 10 字以上)");
+            else if (title.length > 60) warnings.push("標題太長 (建議 60 字以內)");
+
             if (!desc) missing.push("網頁描述 (Description)");
+            else if (desc.length < 30) warnings.push("描述太短 (建議 30 字以上)");
+
             if (!ogImg) missing.push("社群分享圖片 (og:image)");
             if (!ogTitle) missing.push("社群分享標題 (og:title)");
 
-            if (missing.length > 0) {
+            if (h1s.length === 0) warnings.push("缺少 H1 主要標題");
+            else if (h1s.length > 1) warnings.push("偵測到多個 H1 標題 (建議全頁唯一)");
+
+            if (missing.length > 0 || warnings.length > 0) {
                 const fingerprint = 'SEO_' + window.location.pathname;
                 if (!scannedGaps.has(fingerprint)) {
                     isScanningPaused = true;
                     scannedGaps.add(fingerprint);
+                    
+                    const reason = missing.length > 0 
+                        ? "缺乏關鍵 SEO 標籤：" + missing.join(', ')
+                        : "SEO 結構警告：" + warnings.join(', ');
+
                     window.parent.postMessage({
                         type: 'CGA_AURA_REPORT',
                         payload: {
                             fingerprint,
                             category: "SEO_META",
-                            reason: "缺乏關鍵 SEO/社交分享標籤：" + missing.join(', '),
+                            reason,
                             element: "document.head",
                             path: window.location.pathname
                         }
