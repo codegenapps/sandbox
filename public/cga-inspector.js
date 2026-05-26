@@ -201,28 +201,21 @@ if (typeof window !== 'undefined') {
             // console.log("[Inspector] Found candidates:", candidates.length);
 
             let processedCount = 0;
+            let foundAny = false;
             try {
-                for (const el of candidates) {
+                const candidates = document.querySelectorAll(query);
+                for (let i = 0; i < candidates.length; i++) {
+                    const el = candidates[i];
                     processedCount++;
-                    const fingerprint = window.location.pathname + '_' + el.tagName + '_' + (el.innerText || el.src || el.href || '').trim().substring(0, 15) + '_' + (typeof el.className === 'string' ? el.className : '').substring(0, 10);
+                    
+                    // 💡 修正：指紋加入 index (i)，防止相同內容的元件互相碰撞
+                    const fingerprint = window.location.pathname + '_' + el.tagName + '_' + i + '_' + (el.innerText || el.src || el.href || '').trim().substring(0, 15);
 
                     if (scannedGaps.has(fingerprint)) {
                         continue;
                     }
 
                     const props = getFiberProps(el);
-
-                    // 🔬 [Debug] 只對第一個按鈕打印詳細資料，幫助定位為何沒被抓到
-                    // if (processedCount === 1) {
-                    //     console.log("[Inspector Debug] First Candidate Details:", {
-                    //         tagName: el.tagName,
-                    //         hasProps: !!props,
-                    //         propsKeys: props ? Object.keys(props).join(',') : 'none',
-                    //         onClickType: typeof props?.onClick,
-                    //         onClickStr: props?.onClick?.toString().substring(0, 40)
-                    //     });
-                    // }
-
                     let isUnbound = false;
                     let reason = "";
                     let category = "";
@@ -249,7 +242,6 @@ if (typeof window !== 'undefined') {
 
                     if (!isUnbound && auditorConfig.deadLink && el.tagName === 'A') {
                         const href = el.getAttribute('href');
-                        // 💡 進化：允許錨點跳轉 (#section)，只抓單純的 # 或空值
                         if (!href || href === '#' || href.trim() === '' || href.includes('javascript:void')) {
                             isUnbound = true;
                             category = "DEAD_LINK";
@@ -260,7 +252,6 @@ if (typeof window !== 'undefined') {
                     if (!isUnbound && auditorConfig.imageAudit && el.tagName === 'IMG') {
                         const alt = el.getAttribute('alt');
                         const isBroken = el.complete && (typeof el.naturalWidth !== 'undefined' && el.naturalWidth === 0);
-
                         if (isBroken) {
                             isUnbound = true;
                             category = "IMAGE_AUDIT";
@@ -278,7 +269,7 @@ if (typeof window !== 'undefined') {
                         if (!hasRequired && !hasPattern && el.closest('form')) {
                             isUnbound = true;
                             category = "INPUT_VALIDATION";
-                            reason = "表單輸入框缺乏驗證規則 (如必填或格式限制)，建議補強以確保 API 資料正確";
+                            reason = "表單輸入框缺乏驗證規則 (如必填或格式限制)";
                         }
                     }
 
@@ -287,7 +278,7 @@ if (typeof window !== 'undefined') {
                         if (cls.includes('text-[#') || cls.includes('bg-[#') || (cls.includes('text-black') && !cls.includes('dark:text-'))) {
                             isUnbound = true;
                             category = "DARK_MODE";
-                            reason = "發現硬編碼顏色，這可能會導致深色模式下文字隱形";
+                            reason = "發現硬編碼顏色，可能導致深色模式相容性問題";
                         }
                     }
 
@@ -298,14 +289,14 @@ if (typeof window !== 'undefined') {
                             if (c1.tagName === c2.tagName && c2.tagName === c3.tagName && c1.className === c2.className && c1.className !== '') {
                                 isUnbound = true;
                                 category = "STATIC_LIST";
-                                reason = "偵測到高度重複的內容塊，建議改為動態資料渲染 (map)";
+                                reason = "偵測到高度重複的內容塊，建議改為動態渲染 (map)";
                             }
                         }
                     }
 
                     if (isUnbound) {
-                        // console.log("[Inspector] Found issue:", category, reason, "at fingerprint:", fingerprint);
                         isScanningPaused = true;
+                        foundAny = true;
                         scannedGaps.add(fingerprint);
 
                         clearGapHighlight();
@@ -325,12 +316,16 @@ if (typeof window !== 'undefined') {
                                 path: resolveExactPath(el)
                             }
                         }, '*');
-                        return; // Found one, pause scanning
+                        return; // 找到一個後暫停掃描
                     }
                 }
-                // console.log("[Inspector] Loop completed. All", processedCount, "candidates processed. No issues found.");
             } catch (loopError) {
-                console.error("[Inspector] Loop crashed at element", processedCount, loopError);
+                console.error("[Inspector] Loop crashed", loopError);
+            }
+            
+            // 💡 修正：如果掃完一整圈都沒發現，通知前端「掃描完成」
+            if (!foundAny) {
+                window.parent.postMessage({ type: 'CGA_SCAN_COMPLETED' }, '*');
             }
         }
 
@@ -537,7 +532,8 @@ if (typeof window !== 'undefined') {
         } else if (event.data?.type === 'CGA_RESUME_SCAN') {
             isScanningPaused = false;
             clearGapHighlight();
-            setTimeout(scanNextGap, 1000);
+            // 💡 修正：立即觸發新一輪掃描，確保能銜接下一個問題
+            scanNextGap();
         } else if (event.data?.type === 'CGA_NAVIGATE') {
             const targetPath = event.data.path;
             if (targetPath && targetPath !== window.location.pathname) {
