@@ -570,8 +570,6 @@ if (typeof window !== 'undefined') {
                 if (auditorConfig.enabled) {
                     setTimeout(scanNextGap, 500);
                 }
-            } else {
-                console.log("[Inspector] Config unchanged, ignoring.");
             }
         }
     });
