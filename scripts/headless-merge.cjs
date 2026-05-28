@@ -199,9 +199,24 @@ function fetchDiagram(apiUrl, projectId, token) {
 async function run() {
     const [projectId, apiUrl, token, sqlPath] = process.argv.slice(2);
     try {
-        const res = await fetchDiagram(apiUrl, projectId, token);
         let currentDiagram = { tables: [], relationships: [] };
-        if (res.data?.diagram) currentDiagram = JSON.parse(res.data.diagram);
+        
+        // 🚀 關鍵重構：優先讀取本地產物，支持流水線作業
+        const localPath = '/home/user/app/.cga/merged_diagram.json';
+        if (fs.existsSync(localPath)) {
+            try {
+                const localData = fs.readFileSync(localPath, 'utf8');
+                if (localData) currentDiagram = JSON.parse(localData);
+            } catch (e) {
+                // 若解析失敗則 fallback 到雲端
+            }
+        }
+
+        // 若本地無產物，才向雲端獲取
+        if (currentDiagram.tables.length === 0) {
+            const res = await fetchDiagram(apiUrl, projectId, token);
+            if (res.data?.diagram) currentDiagram = JSON.parse(res.data.diagram);
+        }
         
         const newSql = fs.readFileSync(sqlPath, 'utf8');
         const result = fromPostgres(newSql, currentDiagram.tables);
