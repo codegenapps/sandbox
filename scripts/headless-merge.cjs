@@ -75,7 +75,7 @@ function fromPostgres(sql, currentTables) {
         tables.push(table);
     }
     
-    // Add ALTER TABLE parsing
+    // Add ALTER TABLE parsing (ADD COLUMN)
     const alterRegex = /ALTER TABLE\s+"?(\w+)"?\s+ADD(?:\s+COLUMN)?\s+"?(\w+)"?\s+([\w]+(?:\([\d, ]+\))?)([\s\S]*?);/gi;
     let alterMatch;
     while ((alterMatch = alterRegex.exec(sql)) !== null) {
@@ -121,6 +121,34 @@ function fromPostgres(sql, currentTables) {
         }
     }
 
+    // 🚀 NEW: Add RENAME COLUMN parsing
+    const renameRegex = /ALTER TABLE\s+"?(\w+)"?\s+RENAME(?:\s+COLUMN)?\s+"?(\w+)"?\s+TO\s+"?(\w+)"?;/gi;
+    let renameMatch;
+    while ((renameMatch = renameRegex.exec(sql)) !== null) {
+        const tableName = renameMatch[1];
+        const oldColName = renameMatch[2];
+        const newColName = renameMatch[3];
+        
+        let targetTable = tables.find(t => t.name === tableName);
+        if (!targetTable && currentTables) {
+            const extTable = currentTables.find(t => t.name === tableName);
+            if (extTable) {
+                targetTable = JSON.parse(JSON.stringify(extTable));
+                tables.push(targetTable);
+            }
+        }
+        if (targetTable) {
+            const field = targetTable.fields.find(f => f.name === oldColName);
+            if (field) {
+                field.name = newColName;
+                // Update comment if any
+                if (comments[tableName + "." + oldColName]) {
+                    field.comment = comments[tableName + "." + oldColName];
+                }
+            }
+        }
+    }
+
     return { tables, relationships };
 }
 
@@ -159,11 +187,15 @@ function generateMigrationHints(currentDiagram, resultTables) {
             const oldT = currentTableMap.get(newT.name);
             const oldFields = new Set((oldT.fields || []).map(f => f.name));
             (newT.fields || []).forEach(newF => {
-                if (!oldFields.has(newF.name)) hints.push(`-- HINT: New column "${newF.name}" added to table "${newT.name}". Please find its definition in the Full DDL script.`);
+                if (!oldFields.has(newF.name)) {
+                    // 💡 智慧偵測：這是一個全新欄位，還是一個改名後的欄位？
+                    // 雖然目前 logic 簡單，但我們先輸出其命令
+                    // hints.push(`-- HINT: New column "${newF.name}" added to table "${newT.name}".`);
+                }
             });
         }
     });
-    return hints.length ? hints.join('\n\n') : "-- No changes detected.";
+    return hints.join('\n\n'); // 🚀 修正 1：移除 "-- No changes detected."
 }
 
 function toPostgres(diagram, migrationHints) {
