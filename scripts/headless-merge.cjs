@@ -252,14 +252,30 @@ async function run() {
         
         const newSql = fs.readFileSync(sqlPath, 'utf8');
         const result = fromPostgres(newSql, currentDiagram.tables);
-        const migrationHints = generateMigrationHints(currentDiagram, result.tables);
+        
+        // 🚀 關鍵增強：解析 SQL 中的所有註解並直接應用於地圖
+        const tableComments = {};
+        const fieldComments = {};
+        const commentRegex = /COMMENT ON (TABLE|COLUMN) "?([\w\.]+)"? IS '(.*?)';/gi;
+        let match;
+        while ((match = commentRegex.exec(newSql)) !== null) {
+            const type = match[1].toUpperCase();
+            const target = match[2].replace(/"/g, '');
+            if (type === 'TABLE') tableComments[target] = match[3];
+            else fieldComments[target] = match[3];
+        }
 
         const tableMap = new Map();
         let maxX = 100;
         let maxY = 100;
         
-        // 尋找現有畫布的最佳排列位置，同時支援 position 物件與根部 x,y 欄位
+        // 1. 先處理現有資料表並預填註解
         (currentDiagram.tables || []).forEach(t => {
+            if (tableComments[t.name]) t.comment = tableComments[t.name];
+            t.fields.forEach(f => {
+                const key = t.name + "." + f.name;
+                if (fieldComments[key]) f.comment = fieldComments[key];
+            });
             tableMap.set(t.name, t);
             const curX = t.x || (t.position && t.position.x) || 0;
             const curY = t.y || (t.position && t.position.y) || 0;
@@ -267,7 +283,8 @@ async function run() {
             if (curY > maxY) maxY = curY;
         });
 
-        const newTablesToArrange = [];
+        // 2. 合併由 fromPostgres 產出的新表或欄位變動
+        const migrationHints = generateMigrationHints(currentDiagram, result.tables);
         result.tables.forEach(t => {
            if (tableMap.has(t.name)) {
                const existing = tableMap.get(t.name);
