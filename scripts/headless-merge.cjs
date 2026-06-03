@@ -8,16 +8,16 @@ function nanoid(t=21){return crypto.randomBytes(t).toString("base64").replace(/[
 function escapeQuotes(str) { return str ? str.replace(/[']/g, "''") : ""; }
 
 function parseDefault(field) {
-  if (field.default === null || field.default === undefined) return "";
-  const val = String(field.default).trim();
-  if (val === "" || val === "NULL" || val === "[object Object]") return "";
-  const upperVal = val.toUpperCase();
-  const noQuoteTypes = ['INTEGER', 'NUMERIC', 'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'INT', 'DECIMAL'];
-  const specialValues = ['CURRENT_TIMESTAMP', 'NULL', 'TRUE', 'FALSE', 'NOW()', 'CURRENT_DATE'];
-  if (specialValues.some(v => upperVal.startsWith(v)) || noQuoteTypes.includes(field.type.toUpperCase()) || !isNaN(val)) {
-    return upperVal === 'NOW()' ? 'CURRENT_TIMESTAMP' : val;
-  }
-  return "'" + escapeQuotes(val) + "'";
+    if (field.default === null || field.default === undefined) return "";
+    const val = String(field.default).trim();
+    if (val === "" || val === "NULL" || val === "[object Object]") return "";
+    const upperVal = val.toUpperCase();
+    const noQuoteTypes = ['INTEGER', 'NUMERIC', 'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'INT', 'DECIMAL'];
+    const specialValues = ['CURRENT_TIMESTAMP', 'NULL', 'TRUE', 'FALSE', 'NOW()', 'CURRENT_DATE'];
+    if (specialValues.some(v => upperVal.startsWith(v)) || noQuoteTypes.includes(field.type.toUpperCase()) || !isNaN(val)) {
+        return upperVal === 'NOW()' ? 'CURRENT_TIMESTAMP' : val;
+    }
+    return "'" + escapeQuotes(val) + "'";
 }
 
 function parseCommentForFields(comment) {
@@ -74,7 +74,7 @@ function fromPostgres(sql, currentTables) {
         });
         tables.push(table);
     }
-    
+
     // Add ALTER TABLE parsing (ADD COLUMN)
     const alterRegex = /ALTER TABLE\s+"?(\w+)"?\s+ADD(?:\s+COLUMN)?\s+"?(\w+)"?\s+([\w]+(?:\([\d, ]+\))?)([\s\S]*?);/gi;
     let alterMatch;
@@ -90,19 +90,19 @@ function fromPostgres(sql, currentTables) {
         }
         const rest = alterMatch[4] || "";
         const isPrimary = rest.toUpperCase().includes('PRIMARY KEY');
-        const field = { 
-            id: nanoid(), 
-            name: colName, 
-            type: type, 
-            size: size, 
-            primary: isPrimary, 
-            notNull: rest.toUpperCase().includes('NOT NULL') || isPrimary, 
-            unique: rest.toUpperCase().includes('UNIQUE'), 
-            increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'), 
-            default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "", 
-            comment: comments[tableName + "." + colName] || comments[colName] || "" 
+        const field = {
+            id: nanoid(),
+            name: colName,
+            type: type,
+            size: size,
+            primary: isPrimary,
+            notNull: rest.toUpperCase().includes('NOT NULL') || isPrimary,
+            unique: rest.toUpperCase().includes('UNIQUE'),
+            increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'),
+            default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "",
+            comment: comments[tableName + "." + colName] || comments[colName] || ""
         };
-        
+
         let targetTable = tables.find(t => t.name === tableName);
         if (!targetTable && currentTables) {
             const extTable = currentTables.find(t => t.name === tableName);
@@ -128,7 +128,7 @@ function fromPostgres(sql, currentTables) {
         const tableName = renameMatch[1];
         const oldColName = renameMatch[2];
         const newColName = renameMatch[3];
-        
+
         let targetTable = tables.find(t => t.name === tableName);
         if (!targetTable && currentTables) {
             const extTable = currentTables.find(t => t.name === tableName);
@@ -232,7 +232,7 @@ async function run() {
     const [projectId, apiUrl, token, sqlPath] = process.argv.slice(2);
     try {
         let currentDiagram = { tables: [], relationships: [] };
-        
+
         // 🚀 關鍵重構：優先讀取本地產物，支持流水線作業
         const localPath = '/home/user/app/.cga/merged_diagram.json';
         if (fs.existsSync(localPath)) {
@@ -249,33 +249,17 @@ async function run() {
             const res = await fetchDiagram(apiUrl, projectId, token);
             if (res.data?.diagram) currentDiagram = JSON.parse(res.data.diagram);
         }
-        
+
         const newSql = fs.readFileSync(sqlPath, 'utf8');
         const result = fromPostgres(newSql, currentDiagram.tables);
-        
-        // 🚀 關鍵增強：解析 SQL 中的所有註解並直接應用於地圖
-        const tableComments = {};
-        const fieldComments = {};
-        const commentRegex = /COMMENT ON (TABLE|COLUMN) "?([\w\.]+)"? IS '(.*?)';/gi;
-        let match;
-        while ((match = commentRegex.exec(newSql)) !== null) {
-            const type = match[1].toUpperCase();
-            const target = match[2].replace(/"/g, '');
-            if (type === 'TABLE') tableComments[target] = match[3];
-            else fieldComments[target] = match[3];
-        }
+        const migrationHints = generateMigrationHints(currentDiagram, result.tables);
 
         const tableMap = new Map();
         let maxX = 100;
         let maxY = 100;
-        
-        // 1. 先處理現有資料表並預填註解
+
+        // 尋找現有畫布的最佳排列位置，同時支援 position 物件與根部 x,y 欄位
         (currentDiagram.tables || []).forEach(t => {
-            if (tableComments[t.name]) t.comment = tableComments[t.name];
-            t.fields.forEach(f => {
-                const key = t.name + "." + f.name;
-                if (fieldComments[key]) f.comment = fieldComments[key];
-            });
             tableMap.set(t.name, t);
             const curX = t.x || (t.position && t.position.x) || 0;
             const curY = t.y || (t.position && t.position.y) || 0;
@@ -283,30 +267,29 @@ async function run() {
             if (curY > maxY) maxY = curY;
         });
 
-        // 2. 合併由 fromPostgres 產出的新表或欄位變動
-        const migrationHints = generateMigrationHints(currentDiagram, result.tables);
+        const newTablesToArrange = [];
         result.tables.forEach(t => {
-           if (tableMap.has(t.name)) {
-               const existing = tableMap.get(t.name);
-               
-               // 💡 智慧合併策略：避免 ALTER TABLE 覆寫掉現有的完整設定
-               const mergedComment = t.comment ? t.comment : existing.comment;
-               const mergedIndices = (t.indices && t.indices.length > 0) ? t.indices : existing.indices;
-               
-               // 對於欄位，如果 targetTable 是從 currentTables 拷貝來的，t.fields 已經包含了所有舊欄位+新欄位
-               // 但為保險起見，我們還是把 t.fields 直接覆寫過去，因為前面的邏輯已經做了 merge
-               tableMap.set(t.name, { ...existing, fields: t.fields, comment: mergedComment, indices: mergedIndices });
-           } else {
-               // 💡 終極相容修正：同時寫入根部 x,y 與 position 物件
-               maxX += 150;
-               maxY += 100;
-               t.x = maxX;
-               t.y = maxY;
-               t.position = { x: maxX, y: maxY };
-               
-               tableMap.set(t.name, t);
-               newTablesToArrange.push(t);
-           }
+            if (tableMap.has(t.name)) {
+                const existing = tableMap.get(t.name);
+
+                // 💡 智慧合併策略：避免 ALTER TABLE 覆寫掉現有的完整設定
+                const mergedComment = t.comment ? t.comment : existing.comment;
+                const mergedIndices = (t.indices && t.indices.length > 0) ? t.indices : existing.indices;
+
+                // 對於欄位，如果 targetTable 是從 currentTables 拷貝來的，t.fields 已經包含了所有舊欄位+新欄位
+                // 但為保險起見，我們還是把 t.fields 直接覆寫過去，因為前面的邏輯已經做了 merge
+                tableMap.set(t.name, { ...existing, fields: t.fields, comment: mergedComment, indices: mergedIndices });
+            } else {
+                // 💡 終極相容修正：同時寫入根部 x,y 與 position 物件
+                maxX += 150;
+                maxY += 100;
+                t.x = maxX;
+                t.y = maxY;
+                t.position = { x: maxX, y: maxY };
+
+                tableMap.set(t.name, t);
+                newTablesToArrange.push(t);
+            }
         });
 
         const finalTables = Array.from(tableMap.values());
