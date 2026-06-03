@@ -123,7 +123,7 @@ function fromPostgres(sql, currentTables) {
         }
     }
 
-    // 🚀 NEW: Add RENAME COLUMN parsing
+    // Add RENAME COLUMN parsing
     const renameRegex = /ALTER TABLE\s+"?(\w+)"?\s+RENAME(?:\s+COLUMN)?\s+"?(\w+)"?\s+TO\s+"?(\w+)"?;/gi;
     let renameMatch;
     while ((renameMatch = renameRegex.exec(sql)) !== null) {
@@ -143,7 +143,6 @@ function fromPostgres(sql, currentTables) {
             const field = targetTable.fields.find(f => f.name === oldColName);
             if (field) {
                 field.name = newColName;
-                // Update comment if any
                 if (comments[tableName + "." + oldColName]) {
                     field.comment = comments[tableName + "." + oldColName];
                 }
@@ -180,21 +179,20 @@ function generateExportSQL(diagram) {
 }
 
 function generateMigrationHints(currentDiagram, resultTables, tableComments = {}, fieldComments = {}) {
-    
     const hints = [];
     const currentTableMap = new Map();
     (currentDiagram.tables || []).forEach(t => currentTableMap.set(t.name, t));
     
+    const newTableNames = new Set();
     resultTables.forEach(newT => {
         if (!currentTableMap.has(newT.name)) {
-            
+            newTableNames.add(newT.name);
             hints.push(`-- HINT: New table "${newT.name}" created. Please find its full definition in the Full DDL script.`);
         } else {
             const oldT = currentTableMap.get(newT.name);
-            const oldFields = new Set((oldT.fields || []).map(f => f.name));
             newT.fields.forEach(newF => {
-                if (!oldFields.has(newF.name)) {
-                    
+                const oldF = oldT.fields.find(f => f.name === newF.name);
+                if (!oldF) {
                     hints.push(`ALTER TABLE "${newT.name}" ADD COLUMN "${newF.name}" ${newF.type}${newF.size ? '('+newF.size+')' : ''};`);
                     if (newF.comment) hints.push(`COMMENT ON COLUMN "${newT.name}"."${newF.name}" IS '${escapeQuotes(newF.comment)}';`);
                 }
@@ -202,24 +200,19 @@ function generateMigrationHints(currentDiagram, resultTables, tableComments = {}
         }
     });
 
-    // 🚀 關鍵加固：增量註解支援
-    for (const [tName, comment] of Object.entries(tableComments)) {
+    // 🚀 物理校準：只有當資料表已經在雲端時，才在增量區產出註解更新
+    for (const [tName, comment] of Object.entries(tableComments || {})) {
         const oldT = currentTableMap.get(tName);
-        if (oldT) {
-            
-            if (oldT.comment !== comment) {
-                
-                hints.push(`COMMENT ON TABLE "${tName}" IS '${escapeQuotes(comment)}';`);
-            }
+        if (oldT && oldT.comment !== comment && !newTableNames.has(tName)) {
+            hints.push(`COMMENT ON TABLE "${tName}" IS '${escapeQuotes(comment)}';`);
         }
     }
-    for (const [fKey, comment] of Object.entries(fieldComments)) {
+    for (const [fKey, comment] of Object.entries(fieldComments || {})) {
         const [tName, fName] = fKey.split('.');
         const oldT = currentTableMap.get(tName);
-        if (oldT) {
+        if (oldT && !newTableNames.has(tName)) {
             const oldF = oldT.fields.find(f => f.name === fName);
             if (oldF && oldF.comment !== comment) {
-                
                 hints.push(`COMMENT ON COLUMN "${tName}"."${fName}" IS '${escapeQuotes(comment)}';`);
             }
         }
@@ -275,15 +268,15 @@ async function run() {
 
         const newSql = fs.readFileSync(sqlPath, 'utf8');
         const result = fromPostgres(newSql, currentDiagram.tables);
+        const { tables: resultTables, tableComments, comments: fieldComments } = result;
         
         // 🚀 物理一致性關鍵：先算增量，再算合併
-        
-        const migrationHints = generateMigrationHints(currentDiagram, result.tables, result.tableComments, result.comments);
+        const migrationHints = generateMigrationHints(currentDiagram, resultTables, tableComments, fieldComments);
 
         const tableMap = new Map();
         currentDiagram.tables.forEach(t => tableMap.set(t.name, t));
 
-        result.tables.forEach(newT => {
+        resultTables.forEach(newT => {
             if (tableMap.has(newT.name)) {
                 const existing = tableMap.get(newT.name);
                 newT.fields.forEach(nf => {
@@ -298,12 +291,12 @@ async function run() {
             }
         });
 
-        for (const [tName, comment] of Object.entries(result.tableComments)) {
+        for (const [tName, comment] of Object.entries(tableComments)) {
             if (tableMap.has(tName)) tableMap.get(tName).comment = comment;
         }
 
-        // 🚀 關鍵修復：物理回寫欄位註解到地圖
-        for (const [fKey, comment] of Object.entries(result.comments || {})) {
+        // 🚀 物理回寫欄位註解
+        for (const [fKey, comment] of Object.entries(fieldComments || {})) {
             const [tName, fName] = fKey.split('.');
             if (tableMap.has(tName)) {
                 const f = tableMap.get(tName).fields.find(f => f.name === fName);
@@ -317,4 +310,3 @@ async function run() {
     } catch (err) { process.stderr.write("MERGE_FAILED: " + err.message); process.exit(1); }
 }
 run();
-
