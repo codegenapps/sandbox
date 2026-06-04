@@ -26,6 +26,14 @@ function parseCommentForFields(comment) {
     return { type: typeMatch ? typeMatch[1] : '' };
 }
 
+function stripPermissionTags(str) {
+    if (!str) return "";
+    return str.replace(/@oso=\{[\s\S]*?\}/g, "")
+              .replace(/@public_methods=\[[\s\S]*?\]/g, "")
+              .replace(/\s+/g, ' ')
+              .trim();
+}
+
 function fromPostgres(sql, currentTables) {
     const tables = [];
     const relationships = [];
@@ -39,7 +47,7 @@ function fromPostgres(sql, currentTables) {
         const fName = match[4] || match[5];
         const comment = match[6];
         if (type === 'TABLE' || !fName) tableComments[tName] = comment;
-        else comments[tName + "." + fName] = comment;
+        else comments[tName + "." + fName] = stripPermissionTags(comment);
     }
 
     const tableRegex = /CREATE TABLE "?(\w+)"? \(([\s\S]*?)\);/gi;
@@ -70,7 +78,7 @@ function fromPostgres(sql, currentTables) {
             }
             const rest = partsMatch[3];
             const isPrimary = rest.toUpperCase().includes('PRIMARY KEY');
-            const field = { id: nanoid(), name: colName, type: type, size: size, primary: isPrimary, notNull: rest.toUpperCase().includes('NOT NULL') || isPrimary, unique: rest.toUpperCase().includes('UNIQUE'), increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'), default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "", comment: comments[tableName + "." + colName] || comments[colName] || "" };
+            const field = { id: nanoid(), name: colName, type: type, size: size, primary: isPrimary, notNull: rest.toUpperCase().includes('NOT NULL') || isPrimary, unique: rest.toUpperCase().includes('UNIQUE'), increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'), default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "", comment: comments[tableName + "." + colName] || stripPermissionTags(comments[colName]) || "" };
             if (colName === 'id') { field.type = 'INTEGER'; field.primary = true; field.increment = true; }
             table.fields.push(field);
         });
@@ -102,7 +110,7 @@ function fromPostgres(sql, currentTables) {
             unique: rest.toUpperCase().includes('UNIQUE'), 
             increment: rest.toUpperCase().includes('GENERATED') || type.includes('SERIAL'), 
             default: (rest.match(/DEFAULT\s+((?!AS|GENERATED|IDENTITY)[^(\s,;)]+|\(.*?\))/i) || [])[1]?.replace(/'/g, '').replace(/\(\)/g, '') || "", 
-            comment: comments[tableName + "." + colName] || comments[colName] || "" 
+            comment: stripPermissionTags(comments[tableName + "." + colName] || comments[colName] || "")
         };
         
         let targetTable = (tables.find(t => t.name === tableName));
@@ -144,7 +152,7 @@ function fromPostgres(sql, currentTables) {
             if (field) {
                 field.name = newColName;
                 if (comments[tableName + "." + oldColName]) {
-                    field.comment = comments[tableName + "." + oldColName];
+                    field.comment = stripPermissionTags(comments[tableName + "." + oldColName]);
                 }
             }
         }
@@ -164,7 +172,7 @@ function generateExportSQL(diagram) {
         const pk = table.fields.some(f => f.primary) ? `,\n	PRIMARY KEY(${table.fields.filter(f => f.primary).map(f => `"${f.name}"`).join(", ")})` : "";
         const uq = (table.uniqueConstraints || []).map(c => `,\n	UNIQUE (${c.map(f => `"${f}"`).join(", ")})`).join("");
         const comments = [table.comment ? `\nCOMMENT ON TABLE "${table.name}" IS '${escapeQuotes(table.comment)}';` : ""];
-        table.fields.forEach(f => { if(f.comment) comments.push(`\nCOMMENT ON COLUMN "${table.name}"."${f.name}" IS '${escapeQuotes(f.comment)}';`); });
+        table.fields.forEach(f => { if(f.comment) comments.push(`\nCOMMENT ON COLUMN "${table.name}"."${f.name}" IS '${escapeQuotes(stripPermissionTags(f.comment))}';`); });
         const indices = (table.indices || []).map(i => `\nCREATE ${i.unique ? "UNIQUE " : ""}INDEX "${i.name.replace(/\s+/g, '_')}" ON "${table.name}" (${i.fields.map(f => `"${f}"`).join(", ")});`).join("");
         return `CREATE TABLE "${table.name}" (\n${fieldDefinitions}${pk}${uq}\n);` + comments.join("");
     }).join("\n\n");
@@ -187,36 +195,16 @@ function generateMigrationHints(currentDiagram, resultTables, tableComments = {}
     resultTables.forEach(newT => {
         if (!currentTableMap.has(newT.name)) {
             newTableNames.add(newT.name);
-            hints.push(`-- HINT: New table "${newT.name}" created. Please find its full definition in the Full DDL script.`);
         } else {
             const oldT = currentTableMap.get(newT.name);
             newT.fields.forEach(newF => {
                 const oldF = oldT.fields.find(f => f.name === newF.name);
                 if (!oldF) {
                     hints.push(`ALTER TABLE "${newT.name}" ADD COLUMN "${newF.name}" ${newF.type}${newF.size ? '('+newF.size+')' : ''};`);
-                    if (newF.comment) hints.push(`COMMENT ON COLUMN "${newT.name}"."${newF.name}" IS '${escapeQuotes(newF.comment)}';`);
                 }
             });
         }
     });
-
-    // 🚀 物理校準：只有當資料表已經在雲端時，才在增量區產出註解更新
-    for (const [tName, comment] of Object.entries(tableComments || {})) {
-        const oldT = currentTableMap.get(tName);
-        if (oldT && oldT.comment !== comment && !newTableNames.has(tName)) {
-            hints.push(`COMMENT ON TABLE "${tName}" IS '${escapeQuotes(comment)}';`);
-        }
-    }
-    for (const [fKey, comment] of Object.entries(fieldComments || {})) {
-        const [tName, fName] = fKey.split('.');
-        const oldT = currentTableMap.get(tName);
-        if (oldT && !newTableNames.has(tName)) {
-            const oldF = oldT.fields.find(f => f.name === fName);
-            if (oldF && oldF.comment !== comment) {
-                hints.push(`COMMENT ON COLUMN "${tName}"."${fName}" IS '${escapeQuotes(comment)}';`);
-            }
-        }
-    }
 
     return hints.join('\n\n');
 }
