@@ -30,14 +30,22 @@ async function init() {
         const pid = process.env.PROJECT_ID;
         const wid = process.env.WEBBUILDER_ID;
         const projectApiUrl = projectDocUrl ? projectDocUrl.replace('/swagger/doc.json', '/api') : '';
+        const isEnvOnly = process.argv.includes('--env-only');
 
         // 1. 清理可能干擾的舊快取
-        if (fs.existsSync('/home/user/app/.next')) fs.rmSync('/home/user/app/.next', { recursive: true, force: true });
+        if (!isEnvOnly && fs.existsSync('/home/user/app/.next')) fs.rmSync('/home/user/app/.next', { recursive: true, force: true });
         
         // 2. 獨立獲取 API Key 
         log('>>> Syncing API Key...');
         const keyRes = await fetch(adminApiUrl + '/projects/' + pid + '/api-key', token);
         const apiKey = (keyRes.data && keyRes.data.api_key) ? keyRes.data.api_key : '';
+
+        if (isEnvOnly) {
+            log('>>> Mode: ENV ONLY. Updating .env.local only...');
+            writeEnv(projectApiUrl, apiKey, projectDocUrl, token);
+            log('>>> Environment updated. Skipping snapshot restoration.');
+            return;
+        }
 
         // 3. 獲取專案完整 Metadata (包含 ZIP URL)
         log('>>> Syncing Project Metadata from Backend...');
