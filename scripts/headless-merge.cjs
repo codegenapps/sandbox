@@ -186,17 +186,16 @@ function generateExportSQL(diagram) {
     return ["CREATE SCHEMA IF NOT EXISTS public;\nSET search_path TO public;", tableSql, fks].filter(Boolean).join("\n\n");
 }
 
-function generateMigrationHints(currentDiagram, resultTables, tableComments = {}, fieldComments = {}) {
+function generateMigrationHints(originalTableMap, resultTables, tableComments = {}, fieldComments = {}) {
     const hints = [];
-    const currentTableMap = new Map();
-    (currentDiagram.tables || []).forEach(t => currentTableMap.set(t.name, t));
     
-    const newTableNames = new Set();
+    // 🚀 物理純淨律：增量區嚴禁出現 COMMENT ON
+    // 註解變更將由下方的全貌區提供給 Atlas 進行自動比對處理
+
+    // 處理現有表的欄位增量 (ALTER TABLE)
     resultTables.forEach(newT => {
-        if (!currentTableMap.has(newT.name)) {
-            newTableNames.add(newT.name);
-        } else {
-            const oldT = currentTableMap.get(newT.name);
+        if (originalTableMap.has(newT.name)) {
+            const oldT = originalTableMap.get(newT.name);
             newT.fields.forEach(newF => {
                 const oldF = oldT.fields.find(f => f.name === newF.name);
                 if (!oldF) {
@@ -206,7 +205,7 @@ function generateMigrationHints(currentDiagram, resultTables, tableComments = {}
         }
     });
 
-    return hints.join('\n\n');
+    return hints.filter(Boolean).join('\n\n');
 }
 
 function toPostgres(diagram, migrationHints) {
@@ -243,23 +242,31 @@ async function run() {
     const [projectId, apiUrl, token, sqlPath] = process.argv.slice(2);
     try {
         let currentDiagram = { tables: [], relationships: [] };
+        let cloudDiagram = { tables: [] }; // 🚀 專門用來追蹤雲端實體狀態
+
+        // 1. 先抓取雲端真實狀態 (這決定了哪些表是真的存在)
+        const res = await fetchDiagram(apiUrl, projectId, token);
+        if (res.data?.diagram) cloudDiagram = JSON.parse(res.data.diagram);
+
+        // 2. 讀取沙盒本地記憶
         const localPath = '/home/user/app/.cga/merged_diagram.json';
         if (fs.existsSync(localPath)) {
             const localData = fs.readFileSync(localPath, 'utf8');
             if (localData) currentDiagram = JSON.parse(localData);
-        }
-
-        if (currentDiagram.tables.length === 0) {
-            const res = await fetchDiagram(apiUrl, projectId, token);
-            if (res.data?.diagram) currentDiagram = JSON.parse(res.data.diagram);
+        } else {
+            currentDiagram = JSON.parse(JSON.stringify(cloudDiagram));
         }
 
         const newSql = fs.readFileSync(sqlPath, 'utf8');
         const result = fromPostgres(newSql, currentDiagram.tables);
         const { tables: resultTables, tableComments, comments: fieldComments } = result;
         
-        // 🚀 物理一致性關鍵：先算增量，再算合併
-        const migrationHints = generateMigrationHints(currentDiagram, resultTables, tableComments, fieldComments);
+        // 🚀 物理校驗關鍵：使用 cloudDiagram 來判定哪些表是「原本就存在的」
+        const originalTableMap = new Map();
+        cloudDiagram.tables.forEach(t => originalTableMap.set(t.name, t));
+
+        // 3. 產出增量 Hints (僅限原有的表)
+        const migrationHints = generateMigrationHints(originalTableMap, resultTables, tableComments, fieldComments);
 
         const tableMap = new Map();
         currentDiagram.tables.forEach(t => tableMap.set(t.name, t));
@@ -283,7 +290,6 @@ async function run() {
             if (tableMap.has(tName)) tableMap.get(tName).comment = comment;
         }
 
-        // 🚀 物理回寫欄位註解
         for (const [fKey, comment] of Object.entries(fieldComments || {})) {
             const [tName, fName] = fKey.split('.');
             if (tableMap.has(tName)) {
