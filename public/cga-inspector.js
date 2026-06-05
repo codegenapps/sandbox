@@ -536,15 +536,11 @@ if (typeof window !== 'undefined') {
             scanNextGap();
         } else if (event.data?.type === 'CGA_NAVIGATE') {
             const targetPath = event.data.path;
-            if (targetPath && targetPath !== window.location.pathname) {
-                // 💡 智慧導航：如果是 .html 結尾，或是偵測到不是 SPA 環境
-                // 則執行強制跳轉 (Location)，否則僅更新 URL (SPA 模式)
-                const isSpa = !!(window.__NEXT_DATA__ || window.next || window.React);
-
-                if (targetPath.toLowerCase().endsWith('.html') || !isSpa) {
+            if (targetPath) {
+                // 💡 強制使用 location.href 進行跳轉，確保頁面內容更新
+                // 雖然會導致 Reload，但這是最穩健的跨框架導航方式
+                if (targetPath !== window.location.pathname + window.location.search) {
                     window.location.href = targetPath;
-                } else {
-                    window.history.pushState(null, '', targetPath);
                 }
             }
         } else if (event.data?.type === 'CGA_SCROLL_TO_GAP') {
