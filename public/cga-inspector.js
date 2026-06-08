@@ -10,6 +10,7 @@ if (typeof window !== 'undefined') {
 
     // 🚀 持久化映射記錄
     window.__cgaMappings = window.__cgaMappings || {};
+    window.__cgaActiveContainerPath = null; // 🚀 紀錄當前鎖定的對接容器區域
 
     // Auditor 狀態
     let isScanningPaused = false;
@@ -106,7 +107,7 @@ if (typeof window !== 'undefined') {
     // 🚀 核心：物理嵌套標記 (Absolute Injection) - RWD 兼容版
     const renderBadge = (target, param) => {
         const id = 'cga-badge-' + Math.random().toString(36).substr(2, 9);
-        
+
         // 💡 關鍵：確保目標是定位容器
         const originalPos = window.getComputedStyle(target).position;
         if (originalPos === 'static') target.style.position = 'relative';
@@ -115,9 +116,9 @@ if (typeof window !== 'undefined') {
         badge.id = id;
         badge.className = 'cga-physical-badge';
         badge.style.cssText = "position: absolute; z-index: 2147483647; top: -32px; left: 0; background: #3b82f6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 900; font-family: sans-serif; pointer-events: auto; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); white-space: nowrap; transform: scale(0.9); transform-origin: bottom left; cursor: default;";
-        
+
         badge.innerHTML = '<span>LINKED: ' + param.id + '</span>';
-        
+
         const closeBtn = document.createElement('div');
         closeBtn.innerHTML = '✕';
         closeBtn.style.cssText = "cursor: pointer; background: rgba(0,0,0,0.3); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 10px; transition: all 0.2s;";
@@ -130,9 +131,9 @@ if (typeof window !== 'undefined') {
             delete window.__cgaMappings[id];
             notifyMappingsChanged();
         };
-        
+
         badge.appendChild(closeBtn);
-        
+
         // 💡 處理 img/input 無法 appendChild 的情況
         if (['img', 'input', 'textarea', 'hr', 'br'].includes(target.tagName.toLowerCase())) {
             target.parentElement.style.position = 'relative';
@@ -140,7 +141,7 @@ if (typeof window !== 'undefined') {
         } else {
             target.appendChild(badge);
         }
-        
+
         target.style.outline = '3px solid #3b82f6';
         target.style.outlineOffset = '2px';
         target.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.4)';
@@ -149,7 +150,7 @@ if (typeof window !== 'undefined') {
     };
 
     const notifyMappingsChanged = () => {
-        (window.parent || window.top).postMessage({ type: 'CGA_MAPPINGS_UPDATED', mappings: window.__cgaMappings }, '*');
+        (window.parent || window.top).postMessage({type: 'CGA_MAPPINGS_UPDATED', mappings: window.__cgaMappings}, '*');
     };
 
     const isNoop = (fn) => {
@@ -240,14 +241,10 @@ if (typeof window !== 'undefined') {
         if (auditorConfig.deadLink) selectors.push('a');
         if (auditorConfig.imageAudit) selectors.push('img');
         if (auditorConfig.inputValidation) selectors.push('input:not([type="hidden"]):not([type="submit"]):not([type="button"])', 'textarea');
-        if (auditorConfig.darkMode) selectors.push('[class*="text-[#"]', '[class*="bg-[#"]', '.text-black', '.bg-white');
         if (auditorConfig.staticList) selectors.push('ul', '.grid', '.flex');
 
         if (selectors.length > 0) {
             const query = selectors.join(', ');
-            // console.log("[Inspector] Scanning for:", query);
-            const candidates = document.querySelectorAll(query);
-            // console.log("[Inspector] Found candidates:", candidates.length);
 
             let processedCount = 0;
             let foundAny = false;
@@ -365,7 +362,7 @@ if (typeof window !== 'undefined') {
 
             // 💡 修正：如果掃完一整圈都沒發現，通知前端「掃描完成」
             if (!foundAny) {
-                window.parent.postMessage({ type: 'CGA_SCAN_COMPLETED' }, '*');
+                window.parent.postMessage({type: 'CGA_SCAN_COMPLETED'}, '*');
             }
         }
 
@@ -501,13 +498,21 @@ if (typeof window !== 'undefined') {
             window.__cgaDraggingApi = null;
             clearHighlight();
         } else if (event.data?.type === 'CGA_INTERNAL_DRAG_OVER') {
-            const target = document.elementFromPoint(event.data.x, event.data.y);
-            if (target && target !== window.__cgaLastHighlighted) {
+            const t = document.elementFromPoint(event.data.x, event.data.y);
+            if (t && t !== window.__cgaLastHighlighted) {
+                // 🛡️ 拖曳中的邊界引導
+                if (window.__cgaActiveContainerPath) {
+                    const container = document.querySelector(window.__cgaActiveContainerPath);
+                    if (container && !container.contains(t)) {
+                        clearHighlight();
+                        return;
+                    }
+                }
                 clearHighlight();
-                target.style.outline = '2px dashed #a855f7';
-                target.style.outlineOffset = '2px';
-                target.style.backgroundColor = 'rgba(168, 85, 247, 0.1)';
-                window.__cgaLastHighlighted = target;
+                t.style.outline = '2px dashed #a855f7';
+                t.style.outlineOffset = '2px';
+                t.style.backgroundColor = 'rgba(168, 85, 247, 0.1)';
+                window.__cgaLastHighlighted = t;
             }
         } else if (event.data?.type === 'CGA_INTERNAL_DRAG_LEAVE') {
             clearHighlight();
@@ -518,9 +523,16 @@ if (typeof window !== 'undefined') {
                 const resolvedPath = resolveExactPath(target);
                 // 🚀 物理提權：嘗試尋找最近的業務容器，以便渲染完整的視覺骨架
                 const container = target.closest('.glass-panel, section, article, div[class*="item"], div[class*="card"], li, .group') || target.parentElement || target;
+
+                // 🛡️ 紀錄鎖定路徑供後續參數投遞檢查
+                const idx = Array.from(document.querySelectorAll(container.tagName)).indexOf(container);
+                const selector = container.tagName.toLowerCase() + ':nth-of-type(' + (idx + 1) + ')';
+                window.__cgaActiveContainerPath = selector;
+
                 window.parent.postMessage({
                     type: 'CGA_API_DROPPED',
                     path: resolvedPath,
+                    containerPath: selector, // 🚀 新增傳送容器選擇器
                     element: container.outerHTML,
                     api: dragData
                 }, '*');
@@ -530,16 +542,37 @@ if (typeof window !== 'undefined') {
         } else if (event.data?.type === 'CGA_PARAM_DROPPED') {
             // 🚀 核心：參數投遞處理 (畫布直連)
             const t = document.elementFromPoint(event.data.x, event.data.y);
-            if (t && event.data.param) {
-                const badgeId = renderBadge(t, event.data.param);
-                window.__cgaMappings[badgeId] = {
-                    paramId: event.data.param.id,
-                    elementInfo: getElementInfo(t),
-                    path: resolveExactPath(t)
-                };
-                notifyMappingsChanged();
+            if (!t || !event.data.param) return;
+
+            // 🛡️ 區域保護邏輯
+            if (window.__cgaActiveContainerPath) {
+                const container = document.querySelector(window.__cgaActiveContainerPath);
+                if (container && !container.contains(t)) {
+                    alert('⚠️ 對接失敗：請將參數拖曳到當前選定的組件區域內！');
+                    return;
+                }
             }
+
+            const badgeId = renderBadge(t, event.data.param);
+            window.__cgaMappings[badgeId] = {
+                paramId: event.data.param.id,
+                elementInfo: getElementInfo(t),
+                path: resolveExactPath(t)
+            };
+            notifyMappingsChanged();
             clearHighlight();
+        } else if (event.data?.type === 'CGA_CLEAR_MAPPINGS') {
+            // 🚀 一鍵清除畫布標記
+            const badges = document.querySelectorAll('.cga-physical-badge');
+            badges.forEach(b => b.remove());
+            // 清除所有高亮
+            const els = document.querySelectorAll('[style*="outline"]');
+            els.forEach(el => {
+                el.style.outline = '';
+                el.style.boxShadow = '';
+            });
+            window.__cgaMappings = {};
+            notifyMappingsChanged();
         } else if (event.data?.type === 'CGA_RESUME_SCAN') {
             isScanningPaused = false;
             clearGapHighlight();
