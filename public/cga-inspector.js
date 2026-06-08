@@ -8,6 +8,9 @@ if (typeof window !== 'undefined') {
     let __cgaHoverBox = null;
     let __cgaHoverLabel = null;
 
+    // 🚀 持久化映射記錄
+    window.__cgaMappings = window.__cgaMappings || {};
+
     // Auditor 狀態
     let isScanningPaused = false;
     const scannedGaps = new Set();
@@ -98,6 +101,55 @@ if (typeof window !== 'undefined') {
         if (key.startsWith('__reactProps$')) return target[key];
         const fiber = target[key];
         return fiber?.memoizedProps || fiber?.pendingProps;
+    };
+
+    // 🚀 核心：物理嵌套標記 (Absolute Injection) - RWD 兼容版
+    const renderBadge = (target, param) => {
+        const id = 'cga-badge-' + Math.random().toString(36).substr(2, 9);
+        
+        // 💡 關鍵：確保目標是定位容器
+        const originalPos = window.getComputedStyle(target).position;
+        if (originalPos === 'static') target.style.position = 'relative';
+
+        const badge = document.createElement('div');
+        badge.id = id;
+        badge.className = 'cga-physical-badge';
+        badge.style.cssText = "position: absolute; z-index: 2147483647; top: -32px; left: 0; background: #3b82f6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 900; font-family: sans-serif; pointer-events: auto; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); white-space: nowrap; transform: scale(0.9); transform-origin: bottom left; cursor: default;";
+        
+        badge.innerHTML = '<span>LINKED: ' + param.id + '</span>';
+        
+        const closeBtn = document.createElement('div');
+        closeBtn.innerHTML = '✕';
+        closeBtn.style.cssText = "cursor: pointer; background: rgba(0,0,0,0.3); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 10px; transition: all 0.2s;";
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            badge.remove();
+            target.style.outline = '';
+            target.style.boxShadow = '';
+            delete window.__cgaMappings[id];
+            notifyMappingsChanged();
+        };
+        
+        badge.appendChild(closeBtn);
+        
+        // 💡 處理 img/input 無法 appendChild 的情況
+        if (['img', 'input', 'textarea', 'hr', 'br'].includes(target.tagName.toLowerCase())) {
+            target.parentElement.style.position = 'relative';
+            target.parentElement.appendChild(badge);
+        } else {
+            target.appendChild(badge);
+        }
+        
+        target.style.outline = '3px solid #3b82f6';
+        target.style.outlineOffset = '2px';
+        target.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.4)';
+
+        return id;
+    };
+
+    const notifyMappingsChanged = () => {
+        (window.parent || window.top).postMessage({ type: 'CGA_MAPPINGS_UPDATED', mappings: window.__cgaMappings }, '*');
     };
 
     const isNoop = (fn) => {
@@ -464,16 +516,30 @@ if (typeof window !== 'undefined') {
             if (target && window.__cgaDraggingApi) {
                 const dragData = window.__cgaDraggingApi;
                 const resolvedPath = resolveExactPath(target);
-                const info = getElementInfo(target);
+                // 🚀 物理提權：嘗試尋找最近的業務容器，以便渲染完整的視覺骨架
+                const container = target.closest('.glass-panel, section, article, div[class*="item"], div[class*="card"], li, .group') || target.parentElement || target;
                 window.parent.postMessage({
                     type: 'CGA_API_DROPPED',
                     path: resolvedPath,
-                    element: info,
+                    element: container.outerHTML,
                     api: dragData
                 }, '*');
             }
             clearHighlight();
             window.__cgaDraggingApi = null;
+        } else if (event.data?.type === 'CGA_PARAM_DROPPED') {
+            // 🚀 核心：參數投遞處理 (畫布直連)
+            const t = document.elementFromPoint(event.data.x, event.data.y);
+            if (t && event.data.param) {
+                const badgeId = renderBadge(t, event.data.param);
+                window.__cgaMappings[badgeId] = {
+                    paramId: event.data.param.id,
+                    elementInfo: getElementInfo(t),
+                    path: resolveExactPath(t)
+                };
+                notifyMappingsChanged();
+            }
+            clearHighlight();
         } else if (event.data?.type === 'CGA_RESUME_SCAN') {
             isScanningPaused = false;
             clearGapHighlight();
