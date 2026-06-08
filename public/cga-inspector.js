@@ -19,10 +19,7 @@ if (typeof window !== 'undefined') {
         deadLink: false,
         seoMeta: false,
         imageAudit: false,
-        responsive: false,
-        darkMode: false,
-        inputValidation: false,
-        runtimeError: false
+        inputValidation: false
     };
 
     // --- 2. 輔助函式區 ---
@@ -273,15 +270,6 @@ if (typeof window !== 'undefined') {
                         }
                     }
 
-                    if (!isUnbound && auditorConfig.darkMode) {
-                        const cls = typeof el.className === 'string' ? el.className : '';
-                        if (cls.includes('text-[#') || cls.includes('bg-[#') || (cls.includes('text-black') && !cls.includes('dark:text-'))) {
-                            isUnbound = true;
-                            category = "DARK_MODE";
-                            reason = "發現硬編碼顏色，可能導致深色模式相容性問題";
-                        }
-                    }
-
                     if (!isUnbound && auditorConfig.staticList && (el.tagName === 'UL' || (typeof el.className === 'string' && (el.className.includes('grid') || el.className.includes('flex'))))) {
                         const children = el.children;
                         if (children.length >= 3) {
@@ -383,30 +371,6 @@ if (typeof window !== 'undefined') {
                 }
             }
         }
-
-        // --- 🟢 響應式溢出偵測 ---
-        if (auditorConfig.responsive) {
-            const docWidth = document.documentElement.scrollWidth;
-            const winWidth = window.innerWidth;
-            if (docWidth > winWidth + 10) {
-                const fingerprint = 'OVERFLOW_' + window.location.pathname + '_' + winWidth;
-                if (!scannedGaps.has(fingerprint)) {
-                    isScanningPaused = true;
-                    scannedGaps.add(fingerprint);
-                    window.parent.postMessage({
-                        type: 'CGA_AURA_REPORT',
-                        payload: {
-                            fingerprint,
-                            category: "RESPONSIVE_OVERFLOW",
-                            reason: '頁面寬度 (' + docWidth + 'px) 在目前的視窗寬度 (' + winWidth + 'px) 下發生溢出，出現水平捲軸',
-                            element: "document.documentElement",
-                            path: window.location.pathname
-                        }
-                    }, '*');
-                    return;
-                }
-            }
-        }
     };
 
     // --- 5. 初始化與攔截設定 ---
@@ -444,25 +408,6 @@ if (typeof window !== 'undefined') {
         console.error = (...args) => {
             const msg = serializeArgs(args);
             window.parent.postMessage({type: 'CGA_CONSOLE_LOG', level: 'error', payload: msg}, '*');
-
-            if (auditorConfig?.runtimeError && !isScanningPaused && !msg.includes('[CGA Inspector]')) {
-                const fingerprint = `ERROR_${msg.replace(/\n/g, '').substring(0, 30)}`;
-                if (!scannedGaps.has(fingerprint)) {
-                    isScanningPaused = true;
-                    scannedGaps.add(fingerprint);
-                    clearGapHighlight();
-                    window.parent.postMessage({
-                        type: 'CGA_AURA_REPORT',
-                        payload: {
-                            fingerprint,
-                            category: 'RUNTIME_ERROR',
-                            reason: '主控台發生執行期錯誤',
-                            element: msg.substring(0, 150) + (msg.length > 150 ? '...' : ''),
-                            path: window.location.pathname
-                        }
-                    }, '*');
-                }
-            }
             originalError(...args);
         };
 
