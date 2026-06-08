@@ -135,19 +135,60 @@ function generateApiSdk(apiDir, schemaContent) {
 }
 
 function writeEnv(apiUrl, apiKey, docUrl, token) {
-    let env = `
-NEXT_PUBLIC_CGA_API_URL=${apiUrl}
-NEXT_PUBLIC_CGA_API_KEY=${apiKey}
-NEXT_PUBLIC_CGA_DOC_URL=${docUrl}
-VITE_CGA_API_URL=${apiUrl}
-VITE_CGA_API_KEY=${apiKey}
-VITE_CGA_DOC_URL=${docUrl}
-CGA_ACCESS_TOKEN=${token}
-`;
-    if (process.env.GITHUB_ACCESS_TOKEN) {
-        env += `GITHUB_ACCESS_TOKEN=${process.env.GITHUB_ACCESS_TOKEN}\n`;
+    const envPath = '/home/user/app/.env.local';
+    let existingEnv = {};
+
+    // 1. 嘗試讀取現有的 .env.local 並解析
+    if (fs.existsSync(envPath)) {
+        try {
+            const content = fs.readFileSync(envPath, 'utf8');
+            content.split('\n').forEach(line => {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+                    const [key, ...valueParts] = trimmed.split('=');
+                    existingEnv[key.trim()] = valueParts.join('=').trim();
+                }
+            });
+            log('>>> Parsed existing .env.local for merging.');
+        } catch (e) {
+            log('>>> [Warning] Failed to parse existing .env.local: ' + e.message);
+        }
     }
-    fs.writeFileSync('/home/user/app/.env.local', env.trim() + '\n');
+
+    // 2. 定義系統管理的變數 (這些會被強制更新)
+    const systemVars = {
+        'NEXT_PUBLIC_CGA_API_URL': apiUrl,
+        'NEXT_PUBLIC_CGA_API_KEY': apiKey,
+        'NEXT_PUBLIC_CGA_DOC_URL': docUrl,
+        'VITE_CGA_API_URL': apiUrl,
+        'VITE_CGA_API_KEY': apiKey,
+        'VITE_CGA_DOC_URL': docUrl,
+        'CGA_ACCESS_TOKEN': token
+    };
+
+    if (process.env.GITHUB_ACCESS_TOKEN) {
+        systemVars['GITHUB_ACCESS_TOKEN'] = process.env.GITHUB_ACCESS_TOKEN;
+    }
+
+    // 3. 合併：系統變數覆蓋舊變數，其餘保留
+    const mergedEnv = { ...existingEnv, ...systemVars };
+
+    // 4. 序列化並寫回
+    let envString = '# --- System Managed Variables (Auto-Updated) ---\n';
+    Object.keys(systemVars).forEach(key => {
+        envString += `${key}=${systemVars[key]}\n`;
+    });
+
+    const userKeys = Object.keys(mergedEnv).filter(key => !Object.keys(systemVars).includes(key));
+    if (userKeys.length > 0) {
+        envString += '\n# --- User Defined Variables (Preserved) ---\n';
+        userKeys.forEach(key => {
+            envString += `${key}=${mergedEnv[key]}\n`;
+        });
+    }
+
+    fs.writeFileSync(envPath, envString.trim() + '\n');
+    log('>>> .env.local updated with smart merging.');
 }
 
 init().catch(console.error);
