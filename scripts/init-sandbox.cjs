@@ -125,7 +125,7 @@ function generateApiSdk(apiDir, schemaContent) {
         
         // 💡 移除 --modular，改用單一檔案模式 (-n Api.ts)
         const schemaPath = path.join(apiDir, 'schema.json');
-        execSync(`npx swagger-typescript-api generate -p ${schemaPath} -o ${genDir} -n Api.ts --axios --route-types --unwrap-response-data`, { stdio: 'pipe' });
+        execSync(`npx swagger-typescript-api generate -p ${schemaPath} -o ${genDir} -n Api.ts --axios --route-types --unwrap-response-data --module-name-index -1`, { stdio: 'pipe' });
         
         log('>>> API SDK generated successfully.');
         
