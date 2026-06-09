@@ -28,25 +28,50 @@ try {
         process.exit(0);
     }
     
-    // 🔬 改用原生 TypeScript 解析器，這是一個純粹的字符串到 AST 的轉換，不涉及 TypeCheck，絕對不會崩潰
-    const sourceFile = ts.createSourceFile(
-        filePath, 
-        content, 
-        ts.ScriptTarget.Latest, 
-        true, 
-        ts.ScriptKind.TSX
-    );
-    
-    const diagnostics = sourceFile.parseDiagnostics;
+    // 🔬 升級為微型編譯器（單一檔案型）：
+    // 透過 skipLibCheck: true 與 types: [] 進行極速加載（不爬 node_modules，避免配置衝突），
+    // 既能精準捕捉未宣告變數（ReferenceError），又能保持 100% 的啟動穩定性！
+    const program = ts.createProgram([filePath], {
+        noEmit: true,
+        jsx: ts.JsxEmit.ReactJSX,
+        target: ts.ScriptTarget.Latest,
+        skipLibCheck: true,
+        types: []
+    });
 
-    if (diagnostics && diagnostics.length > 0) {
-        // 只過濾出真正的 Error (忽視 Warning)
-        const fatalErrors = diagnostics.filter(d => d.category === ts.DiagnosticCategory.Error);
-        
-        if (fatalErrors.length > 0) {
-            console.log('SYNTAX_ERROR: ' + fatalErrors[0].messageText);
-            process.exit(0);
+    const sourceFile = program.getSourceFile(filePath);
+    if (!sourceFile) {
+        console.log('SYNTAX_ERROR: Could not load source file inside program');
+        process.exit(0);
+    }
+
+    // 1. 獲取語法診斷 (標籤閉合、成對括號等)
+    const syntaxErrors = sourceFile.parseDiagnostics || [];
+
+    // 2. 獲取語意診斷，並透過過濾器「只篩選出未宣告變數/作用域錯誤」
+    // TS2304: Cannot find name 'XYZ' (ReferenceError)
+    // TS2552: Cannot find name 'XYZ'. Did you mean 'ABC'? (ReferenceError with suggestions)
+    const semanticDiagnostics = program.getSemanticDiagnostics(sourceFile) || [];
+    const referenceErrors = semanticDiagnostics.filter(d => d.category === ts.DiagnosticCategory.Error && (d.code === 2304 || d.code === 2552));
+
+    const fatalErrors = [...syntaxErrors, ...referenceErrors];
+
+    if (fatalErrors.length > 0) {
+        const firstError = fatalErrors[0];
+        let errorMsg = firstError.messageText;
+        if (typeof errorMsg !== 'string') {
+            errorMsg = errorMsg.messageText || 'Unknown typescript error';
         }
+        
+        // 輸出錯誤訊息，並附帶行號
+        let lineInfo = "";
+        if (firstError.file && firstError.start !== undefined) {
+            const { line, character } = firstError.file.getLineAndCharacterOfPosition(firstError.start);
+            lineInfo = ` (Line ${line + 1}:${character + 1})`;
+        }
+
+        console.log(`SYNTAX_ERROR: ${errorMsg}${lineInfo}`);
+        process.exit(0);
     }
 
     console.log('OK');
