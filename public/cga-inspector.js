@@ -237,11 +237,14 @@ if (typeof window !== 'undefined') {
         if (isScanningPaused || !auditorConfig.enabled) return;
 
         const selectors = [];
-        if (auditorConfig.apiBinding) selectors.push('button', 'form');
+        // [暫時註解] apiBinding 在 User-Driven 模式下暫不需要主動掃描
+        // if (auditorConfig.apiBinding) selectors.push('button', 'form');
         if (auditorConfig.deadLink) selectors.push('a');
         if (auditorConfig.imageAudit) selectors.push('img');
-        if (auditorConfig.inputValidation) selectors.push('input:not([type="hidden"]):not([type="submit"]):not([type="button"])', 'textarea');
-        if (auditorConfig.staticList) selectors.push('ul', '.grid', '.flex');
+        // [暫時註解] inputValidation 屬於常規表單，暫不主動掃描
+        // if (auditorConfig.inputValidation) selectors.push('input:not([type="hidden"]):not([type="submit"]):not([type="button"])', 'textarea');
+        // [暫時註解] staticList 容易誤殺 Layout，暫不主動掃描
+        // if (auditorConfig.staticList) selectors.push('ul', '.grid', '.flex');
 
         if (selectors.length > 0) {
             const query = selectors.join(', ');
