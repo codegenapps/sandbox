@@ -1,5 +1,9 @@
-node_modules
-.next
-\nout
+node_modules/
+.next/
+dist/
+out/
 .env*
 .DS_Store
+.shadow/
+.cga/
+*.log
