@@ -1,0 +1,31 @@
+{
+  "mission_goal": "Establish high-end visual theme and core SaaS template baseline for Pangu.",
+  "knowledge_base": {
+    "api_catalog_synced": true,
+    "design_dna": {
+      "accent_color": "#D4AF37",
+      "border_radius": "rounded-xl",
+      "font_family": "var(--font-sans)",
+      "layout_paradigm": "Floating-Minimalist",
+      "media_search_keywords": [
+        "montessori-classroom",
+        "child-sensory-play",
+        "educational-wooden-toys"
+      ],
+      "primary_color": "#4A6B53",
+      "surface_color": "#FBF9F6",
+      "text_color": "#2D3748",
+      "vibe": "New Project"
+    },
+    "project_fingerprint": {
+      "alias_path": "./",
+      "alias_symbol": "@",
+      "framework": "nextjs",
+      "module_system": "commonjs",
+      "router_mode": "next_pages",
+      "src_based": false
+    }
+  },
+  "activity_stream": [],
+  "updated_at": "2026-06-11T22:29:59+08:00"
+}

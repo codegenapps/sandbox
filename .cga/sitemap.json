@@ -1,0 +1,56 @@
+{
+  "global_layout": {
+    "logo_url": "/public/logo.png",
+    "brand_name": "Pangu Sandbox",
+    "implementation_status": {
+      "layout_agent": {
+        "status": "success",
+        "confirmed": true
+      }
+    }
+  },
+  "project_fingerprint": {
+    "framework": "nextjs",
+    "src_based": false,
+    "alias_symbol": "@",
+    "ssr": false
+  },
+  "pages": [
+    {
+      "path": "/",
+      "title": "首頁",
+      "implementation_status": {
+        "copywriter": { "status": "success" },
+        "ui_agent": { "status": "success" },
+        "frontend_agent": { "status": "success" }
+      }
+    },
+    {
+      "path": "/auth/login",
+      "title": "會員登入",
+      "implementation_status": {
+        "copywriter": { "status": "success" },
+        "ui_agent": { "status": "success" },
+        "frontend_agent": { "status": "success" }
+      }
+    },
+    {
+      "path": "/auth/register",
+      "title": "免費註冊",
+      "implementation_status": {
+        "copywriter": { "status": "success" },
+        "ui_agent": { "status": "success" },
+        "frontend_agent": { "status": "success" }
+      }
+    },
+    {
+      "path": "/auth/forgot-password",
+      "title": "重設密碼",
+      "implementation_status": {
+        "copywriter": { "status": "success" },
+        "ui_agent": { "status": "success" },
+        "frontend_agent": { "status": "success" }
+      }
+    }
+  ]
+}
