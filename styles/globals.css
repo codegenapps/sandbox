@@ -5,6 +5,12 @@
 :root {
   --background: #050505;
   --foreground: #ffffff;
+
+  /* 🚀 [三大門神：視覺 CSS 變數] 由 Visualist 根據專案產業動態重寫，實現 0 色差與一秒換膚！ */
+  --color-primary: #3b82f6; /* 預設藍色 */
+  --color-surface: #ffffff; /* 預設背景 */
+  --color-accent: #10b981;  /* 預設輔助 */
+  --color-text: #1f2937;    /* 預設字體 */
 }
 
 body {
