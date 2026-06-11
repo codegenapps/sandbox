@@ -14,6 +14,6 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-surface); /* 🚀 [物理導軌] 動態對齊全站美學主背景色 */
+  color: var(--color-text);         /* 🚀 [物理導軌] 動態對齊全站美學主字體色 */
 }
