@@ -15,7 +15,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <title>CGA Shadow Node</title>
       </Head>
       <NextUIProvider navigate={router.push}>
-        <main className='dark text-foreground bg-background min-h-screen' suppressHydrationWarning>
+        <main className='text-brand-text bg-brand-surface min-h-screen' suppressHydrationWarning>
           <Component {...pageProps} />
         </main>
       </NextUIProvider>
