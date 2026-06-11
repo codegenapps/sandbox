@@ -18,12 +18,17 @@ try {
   
   const designContent = fs.readFileSync(srcPath, 'utf8');
   
-  // 提取色彩與圓角、字體等 DNA 參數
-  const primaryColor = designContent.match(/primary_color:\s*["']?([^"'\s]+)["']?/)?.[1] || '#4A6B53';
-  const surfaceColor = designContent.match(/surface_color:\s*["']?([^"'\s]+)["']?/)?.[1] || '#FBF9F6';
-  const accentColor = designContent.match(/accent_color:\s*["']?([^"'\s]+)["']?/)?.[1] || '#D4AF37';
-  const borderRadius = designContent.match(/border_radius:\s*["']?([^"'\s]+)["']?/)?.[1] || '12px';
-  const font = designContent.match(/font_family:\s*["']?([^"'\n]+)["']?/)?.[1] || 'var(--font-sans)';
+  // 🚀 核心優化：1:1 對齊大師庫 Nested YAML 的色彩解碼正則（絕不抓空！）
+  const primaryColor = designContent.match(/primary:\s*["']([^"']+)["']/)?.[1] || '#4A6B53';
+  const surfaceColor = designContent.match(/canvas-soft:\s*["']([^"']+)["']/)?.[1] || 
+                       designContent.match(/canvas:\s*["']([^"']+)["']/)?.[1] || '#FBF9F6';
+  const accentColor = designContent.match(/ruby:\s*["']([^"']+)["']/)?.[1] || 
+                      designContent.match(/magenta:\s*["']([^"']+)["']/)?.[1] || 
+                      designContent.match(/link:\s*["']([^"']+)["']/)?.[1] || '#D4AF37';
+                      
+  // 圓角與字體提取
+  const borderRadius = designContent.match(/borderRadius:\s*["']?([^"'\n]+)["']?/)?.[1] || '12px';
+  const font = designContent.match(/fontFamily:\s*["']?([^"'\n]+)["']?/)?.[1] || 'var(--font-sans)';
 
   const updatedMasterContent = `---
 vibe: ${presetId}
