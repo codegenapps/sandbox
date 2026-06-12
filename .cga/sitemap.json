@@ -1,5 +1,8 @@
 {
+  "blueprint_confidence_score": 10,
+  "blueprint_status": "locked",
   "global_layout": {
+    "path": "pages/_app.tsx",
     "logo_url": "/public/logo.png",
     "brand_name": "Pangu Sandbox",
     "implementation_status": {
