@@ -3,14 +3,14 @@
   "knowledge_base": {
     "api_catalog_synced": true,
     "project_fingerprint": {
-      "alias_path": "./",
+      "alias_path": ".",
       "alias_symbol": "@",
       "framework": "nextjs",
-      "module_system": "commonjs",
-      "router_mode": "next_pages",
+      "module_system": "esm",
+      "router_mode": "react_pages",
       "src_based": false
     }
   },
   "activity_stream": [],
-  "updated_at": "2026-06-11T22:29:59+08:00"
+  "updated_at": "2026-06-12T12:00:00+08:00"
 }
