@@ -26,6 +26,66 @@ function getLuminance(hex) {
   }
 }
 
+// 🚀 核心大師：全域 CSS 實體路徑自動探測器 (防止 Vite/Next/CRA 各框架路徑大打架！)
+function detectGlobalCSSPath() {
+  const root = '/home/user/app';
+  
+  // A. 經典框架全域樣式物理路徑候選池 (按優先順序探測)
+  const candidates = [
+    path.join(root, 'styles/globals.css'),     // Next.js Pages router (我們的盤古預設)
+    path.join(root, 'src/index.css'),          // Vite / CRA TS 經典
+    path.join(root, 'src/App.css'),            // Vite / CRA JS 經典
+    path.join(root, 'src/app/globals.css'),    // Next.js App router (含 src)
+    path.join(root, 'app/globals.css'),        // Next.js App router (扁平)
+    path.join(root, 'styles.css'),             // 純靜態 / 扁平 HTML
+    path.join(root, 'css/style.css'),          // 純靜態傳統
+    path.join(root, 'src/styles.css')          // 自定義 Angular/React
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      console.log(`[CSS Detector] Target CSS located on disk: ${p}`);
+      return p;
+    }
+  }
+
+  // B. 智能自癒 Fallback：如果都沒找到，掃描專案中所有的 *.css 檔案，找出最像全域樣式的檔案
+  try {
+    const scanDir = (dir) => {
+      let results = [];
+      const list = fs.readdirSync(dir);
+      list.forEach((file) => {
+        const fullPath = path.join(dir, file);
+        if (file === 'node_modules' || file === '.next' || file === '.git' || file === 'dist' || file === 'out') return;
+        const stat = fs.statSync(fullPath);
+        if (stat && stat.isDirectory()) {
+          results = results.concat(scanDir(fullPath));
+        } else if (file.endsWith('.css')) {
+          results.push(fullPath);
+        }
+      });
+      return results;
+    };
+
+    const cssFiles = scanDir(root);
+    // 優先匹配名字含有 global、index、app、style 的 CSS 檔案
+    const bestMatch = cssFiles.find(f => f.includes('global') || f.includes('index') || f.includes('app') || f.includes('style'));
+    if (bestMatch) {
+      console.log(`[CSS Detector] Fallback scanned best CSS match on disk: ${bestMatch}`);
+      return bestMatch;
+    }
+    if (cssFiles.length > 0) {
+      console.log(`[CSS Detector] Fallback to first css found: ${cssFiles[0]}`);
+      return cssFiles[0];
+    }
+  } catch (e) {
+    console.warn(`[CSS Detector Warning] Deep scan failed: ${e.message}`);
+  }
+
+  // C. 終極 Fallback：使用 Pages router 預設
+  return path.join(root, 'styles/globals.css');
+}
+
 try {
   const srcPath = `/home/user/.cga/awesome-design-md/design-md/${presetId}/DESIGN.md`;
   const destPath = '/home/user/app/.cga/design-system/default/MASTER.md';
@@ -122,8 +182,8 @@ ${designContent}`;
   if (!fs.existsSync(cgaDir)) fs.mkdirSync(cgaDir, { recursive: true });
   fs.writeFileSync(destPath, updatedMasterContent);
 
-  // F. 🚀 終極重構：直接動態產生整個 :root 區塊，100% 絕對寫入，絕不遺漏任何變數！
-  const cssPath = '/home/user/app/styles/globals.css';
+  // F. 🚀 終極自適應路徑探測與寫入
+  const cssPath = detectGlobalCSSPath();
   if (fs.existsSync(cssPath)) {
     let css = fs.readFileSync(cssPath, 'utf8');
     

@@ -9,12 +9,6 @@
       }
     }
   },
-  "project_fingerprint": {
-    "framework": "nextjs",
-    "src_based": false,
-    "alias_symbol": "@",
-    "ssr": false
-  },
   "pages": [
     {
       "path": "/",
