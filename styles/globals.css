@@ -6,14 +6,58 @@
   --background: #050505;
   --foreground: #ffffff;
 
-  /* 🚀 [三大門神：視覺 CSS 變數] 由 Visualist 根據專案產業動態重寫，實現 0 色差與一秒換膚！ */
-  --color-primary: #3b82f6; /* 預設藍色 */
-  --color-surface: #ffffff; /* 預設背景 */
-  --color-accent: #10b981;  /* 預設輔助 */
-  --color-text: #1f2937;    /* 預設字體 */
+  /* 🚀 [大師美學視覺變數] 由 apply_preset 全量動態改寫，實現 100% 全域熱更新！ */
+  --color-primary: #4A6B53; 
+  --color-surface: #FBF9F6; 
+  --color-accent: #D4AF37;  
+  --color-text: #2D3748;    
+  --color-card: rgba(255, 255, 255, 0.85);
+  --color-border: rgba(0, 0, 0, 0.08);
+  
+  /* 🚀 [主/輔色文字對比度變數] 防止白底白字、白底金字慘案！ */
+  --color-on-primary: #ffffff; 
+  --color-on-accent: #ffffff;  
+
+  /* 🚀 [大師骨骼與光影變數 - 雙軌圓角分流！] */
+  --border-radius: 12px;        
+  --border-radius-button: 12px; 
+  
+  --brand-shadow: 0 10px 30px -3px rgba(0, 0, 0, 0.08);
+  --font-family: var(--font-sans);
 }
 
 body {
-  background: var(--color-surface); /* 🚀 [物理導軌] 動態對齊全站美學主背景色 */
-  color: var(--color-text);         /* 🚀 [物理導軌] 動態對齊全站美學主字體色 */
+  background: var(--color-surface); 
+  color: var(--color-text);         
+  font-family: var(--font-family);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 🚀 [美學圓角穿透律] */
+[data-slot="input-wrapper"],
+.nextui-input-wrapper,
+input,
+textarea {
+  border-radius: var(--border-radius) !important;
+  transition: border-radius 0.25s ease;
+}
+
+button,
+[role="button"],
+.nextui-button,
+.bg-brand-primary,
+.bg-brand-accent {
+  border-radius: var(--border-radius-button) !important;
+  transition: border-radius 0.25s ease, background-color 0.25s ease;
+}
+
+/* 🚀 [美學字體穿透律] */
+*, 
+input, 
+button, 
+textarea, 
+select,
+.nextui-button,
+[data-slot="input"] {
+  font-family: var(--font-family) !important;
 }

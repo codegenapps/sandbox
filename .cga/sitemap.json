@@ -9,48 +9,74 @@
       }
     }
   },
-  "project_fingerprint": {
-    "framework": "nextjs",
-    "src_based": false,
-    "alias_symbol": "@",
-    "ssr": false
-  },
   "pages": [
     {
       "path": "/",
-      "title": "首頁",
+      "title": "首頁故事板展廳",
+      "layout_scope": "global",
       "implementation_status": {
         "copywriter": { "status": "success" },
         "ui_agent": { "status": "success" },
         "frontend_agent": { "status": "success" }
-      }
+      },
+      "sections": [
+        { "id": "storyboard_explorer", "status": "success" },
+        { "id": "dashboard_metrics", "status": "success" },
+        { "id": "form_playground", "status": "success" },
+        { "id": "commerce_lists", "status": "success" }
+      ]
     },
     {
       "path": "/auth/login",
       "title": "會員登入",
+      "layout_scope": "none",
       "implementation_status": {
         "copywriter": { "status": "success" },
         "ui_agent": { "status": "success" },
         "frontend_agent": { "status": "success" }
-      }
+      },
+      "sections": [
+        { "id": "login_card", "status": "success" }
+      ]
     },
     {
       "path": "/auth/register",
       "title": "免費註冊",
+      "layout_scope": "none",
       "implementation_status": {
         "copywriter": { "status": "success" },
         "ui_agent": { "status": "success" },
         "frontend_agent": { "status": "success" }
-      }
+      },
+      "sections": [
+        { "id": "register_card", "status": "success" }
+      ]
     },
     {
       "path": "/auth/forgot-password",
       "title": "重設密碼",
+      "layout_scope": "none",
       "implementation_status": {
         "copywriter": { "status": "success" },
         "ui_agent": { "status": "success" },
         "frontend_agent": { "status": "success" }
-      }
+      },
+      "sections": [
+        { "id": "forgot_password_card", "status": "success" }
+      ]
+    },
+    {
+      "path": "/profile",
+      "title": "個人資料設定",
+      "layout_scope": "global",
+      "implementation_status": {
+        "copywriter": { "status": "success" },
+        "ui_agent": { "status": "success" },
+        "frontend_agent": { "status": "success" }
+      },
+      "sections": [
+        { "id": "profile_card", "status": "success" }
+      ]
     }
   ]
 }
