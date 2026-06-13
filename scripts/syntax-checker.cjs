@@ -46,7 +46,7 @@ try {
     }
 
     // 1. 獲取語法診斷 (標籤閉合、成對括號等)
-    const syntaxErrors = sourceFile.parseDiagnostics || [];
+    const syntaxErrors = program.getSyntacticDiagnostics(sourceFile) || [];
 
     // 2. 獲取語意診斷，並透過過濾器「只篩選出未宣告變數/作用域錯誤」
     // TS2304: Cannot find name 'XYZ' (ReferenceError)
