@@ -34,8 +34,6 @@ body {
 }
 
 /* 🚀 [美學圓角穿透律] */
-[data-slot="input-wrapper"],
-.nextui-input-wrapper,
 input,
 textarea {
   border-radius: var(--border-radius) !important;
@@ -44,9 +42,10 @@ textarea {
 
 button,
 [role="button"],
-.nextui-button,
-.bg-brand-primary,
-.bg-brand-accent {
+button.bg-brand-primary,
+button.bg-brand-accent,
+[role="button"].bg-brand-primary,
+[role="button"].bg-brand-accent {
   border-radius: var(--border-radius-button) !important;
   transition: border-radius 0.25s ease, background-color 0.25s ease;
 }
@@ -56,8 +55,6 @@ button,
 input, 
 button, 
 textarea, 
-select,
-.nextui-button,
-[data-slot="input"] {
+select {
   font-family: var(--font-family) !important;
 }
