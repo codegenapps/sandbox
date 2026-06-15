@@ -116,7 +116,12 @@ try {
   let borderRadius = '12px';       // 卡片、容器圓角
   let borderRadiusButton = '12px'; // 按鈕圓角
   
-  if (presetId === 'vercel' || presetId === 'linear' || lowerContent.includes('border-radius: 0px') || lowerContent.includes('sharp')) {
+  if (presetId === 'vercel' || presetId === 'linear' || presetId === 'bmw' || 
+      lowerContent.includes('border-radius: 0px') || 
+      lowerContent.includes('sharp') || 
+      lowerContent.includes('rectangular') || 
+      lowerContent.includes('0px corner') || 
+      lowerContent.includes('0px radius')) {
     borderRadius = '0px';
     borderRadiusButton = '0px';
   } else if (lowerContent.includes('pill') || lowerContent.includes('button-radius: 9999px')) {
@@ -207,6 +212,14 @@ ${designContent}`;
   --border-radius-button: ${borderRadiusButton};
   --brand-shadow: ${brandShadow};
   --font-family: ${fontFamily};
+
+  /* 🚀 NextUI 核心變數大師級穿透直連 (動態主題一鍵套用) */
+  --nextui-primary: var(--color-primary) !important;
+  --nextui-primary-500: var(--color-primary) !important;
+  --nextui-secondary: var(--color-accent) !important;
+  --nextui-secondary-500: var(--color-accent) !important;
+  --nextui-background: var(--color-surface) !important;
+  --nextui-foreground: var(--color-text) !important;
 }
 `;
     // 動態正則覆蓋整個 :root {}，徹底消除 replace 匹配不到的致命隱患！

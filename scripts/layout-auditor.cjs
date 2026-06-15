@@ -25,6 +25,23 @@ const puppeteer = require('puppeteer');
       // 在頁面環境內執行物理測量
       const errors = await page.evaluate((vpName) => {
         const layoutErrors = [];
+
+        // 🛡️ 0. 檢測 Next.js / Vite 伺服器編譯致命錯誤 (Compilation / Build Errors)
+        const bodyText = document.body ? (document.body.innerText || "") : "";
+        const pageTitle = document.title || "";
+        const isNextJsErrorOverlay = !!document.querySelector('nextjs-portal') || !!document.querySelector('#nextjs__container_build_error_label') || !!document.querySelector('.nextjs-toast-errors-parent');
+        const isCompileError = bodyText.includes("Failed to compile") || bodyText.includes("Build Error") || bodyText.includes("Module not found") || pageTitle.includes("Build Error") || isNextJsErrorOverlay;
+
+        if (isCompileError) {
+          layoutErrors.push({
+            viewport: vpName,
+            type: 'COMPILATION_ERROR',
+            element: 'Web Server Compiler',
+            reason: `網頁編譯失敗！控制台顯示致命編譯錯誤或缺少依賴模組。錯誤詳情：${bodyText.slice(0, 400).replace(/\n/g, ' ')}`
+          });
+          return layoutErrors; // 優先中斷並返回編譯錯誤
+        }
+
         const elements = Array.from(document.querySelectorAll('body *'));
 
         // 🛡️ 1. 檢測 RWD 橫向溢出 (Overflow Guard)

@@ -1,6 +1,5 @@
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
-import { NextUIProvider } from '@nextui-org/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
 import '../styles/globals.css';
@@ -14,11 +13,9 @@ export default function App({ Component, pageProps }: AppProps) {
       <Head>
         <title>CGA Shadow Node</title>
       </Head>
-      <NextUIProvider navigate={router.push}>
-        <main className='text-brand-text bg-brand-surface min-h-screen' suppressHydrationWarning>
-          <Component {...pageProps} />
-        </main>
-      </NextUIProvider>
+      <main className='text-brand-text bg-brand-surface min-h-screen' suppressHydrationWarning>
+        <Component {...pageProps} />
+      </main>
     </QueryClientProvider>
   );
 }
