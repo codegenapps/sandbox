@@ -466,7 +466,8 @@ if (typeof window !== 'undefined') {
         const notifyRouteChanged = () => {
             window.parent.postMessage({
                 type: 'CGA_ROUTE_CHANGED',
-                path: window.location.pathname + window.location.search
+                // 🚀 關鍵修復：路由變更推送時補上 window.location.hash，避免錨點/#about等在傳輸時被截斷或遺失！
+                path: window.location.pathname + window.location.search + window.location.hash
             }, '*');
         };
 
@@ -483,6 +484,7 @@ if (typeof window !== 'undefined') {
         };
 
         window.addEventListener('popstate', notifyRouteChanged);
+        window.addEventListener('hashchange', notifyRouteChanged); // 🚀 關鍵新增：監聽 Hash 錨點原生變化，自動推送！
     }
 
     // --- 6. 監聽父視窗指令 ---
@@ -621,10 +623,37 @@ if (typeof window !== 'undefined') {
     window.addEventListener('load', () => {
         window.parent.postMessage({
             type: 'CGA_ROUTE_CHANGED',
-            path: window.location.pathname + window.location.search
+            path: window.location.pathname + window.location.search + window.location.hash
         }, '*');
 
         setTimeout(scanNextGap, 3000);
+
+        // 🚀 CGA 系統加固：一頁式網站「滾動錨點與外層網址列」實時同步攔截器
+        // 💡 關鍵修復：延遲 2000 毫秒綁定，等候 React / Next.js 虛擬 DOM 完全水合渲染完畢，絕不抓空！
+        setTimeout(() => {
+            try {
+                const sections = document.querySelectorAll('section[id], div[id]');
+                if (sections.length > 0) {
+                    const anchorObserver = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                const id = entry.target.getAttribute('id');
+                                const newHash = '#' + id;
+                                // 💡 直接調用原生的 replaceState 變更網址 Hash，這會自動觸發我們重寫的攔截器，
+                                // 自動推送帶有 #Hash 的新路徑給外層，完美閉環！
+                                window.history.replaceState(null, '', newHash);
+                            }
+                        });
+                    }, {
+                        threshold: 0.4,
+                        rootMargin: '-15% 0px -45% 0px'
+                    });
+                    sections.forEach(s => anchorObserver.observe(s));
+                }
+            } catch (anchorErr) {
+                console.error("[CGA Inspector] Anchor scroll spy registration failed:", anchorErr);
+            }
+        }, 2000);
 
         const createHoverBox = () => {
             if (__cgaHoverBox) return;
