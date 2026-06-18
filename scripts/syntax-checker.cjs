@@ -48,11 +48,10 @@ try {
     // 1. 獲取語法診斷 (標籤閉合、成對括號等)
     const syntaxErrors = program.getSyntacticDiagnostics(sourceFile) || [];
 
-    // 2. 獲取語意診斷，並透過過濾器「只篩選出未宣告變數/作用域錯誤」
-    // TS2304: Cannot find name 'XYZ' (ReferenceError)
-    // TS2552: Cannot find name 'XYZ'. Did you mean 'ABC'? (ReferenceError with suggestions)
+    // 2. 獲取語意診斷，並透過過濾器排除「路徑別名或 module 找不到的假性解析錯誤」（如 2307, 2792, 2834, 7016）
+    // 這樣可以 100% 捕獲重複宣告 (TS2300)、作用域/未宣告變數 (TS2304/2552)、巢狀 export 等致命編譯錯誤！
     const semanticDiagnostics = program.getSemanticDiagnostics(sourceFile) || [];
-    const referenceErrors = semanticDiagnostics.filter(d => d.category === ts.DiagnosticCategory.Error && (d.code === 2304 || d.code === 2552));
+    const referenceErrors = semanticDiagnostics.filter(d => d.category === ts.DiagnosticCategory.Error && d.code !== 2307 && d.code !== 2792 && d.code !== 2834 && d.code !== 7016);
 
     const fatalErrors = [...syntaxErrors, ...referenceErrors];
 
